@@ -1,8 +1,8 @@
-# Helicopter Training Simulator
+# Helicopter Flying Simulator
 
-A browser-based helicopter training simulator built with three.js. Learn what every switch, lever and gauge does, start the helicopter from cold yourself, then hover and fly.
+A browser-based helicopter flying simulator built with three.js. Learn what every switch, lever and gauge does, start the helicopter from cold yourself, then hover and fly.
 
-**▶ Play:** https://yaroshitel.github.io/r44-trainer/
+**▶ Play:** https://yaroshitel.github.io/Helicopter-simulator-for-public-use/
 
 ## Helicopters
 

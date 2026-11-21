@@ -2,7 +2,7 @@
 <html lang="en">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta charset="utf-8">
-<title>Helicopter Training Simulator</title>
+<title>Helicopter Flying Simulator</title>
 <style>
 html,body{margin:0;height:100%;overflow:hidden;background:#000;font-family:system-ui,Segoe UI,sans-serif;color:#e8eef5}
 canvas{display:block}
@@ -28,7 +28,7 @@ canvas{display:block}
 kbd{background:#223;border:1px solid #445;border-radius:3px;padding:0 4px;font-size:11px}
 </style>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
-<div id="start"><h1>Helicopter Training Simulator</h1>
+<div id="start"><h1>Helicopter Flying Simulator</h1>
 <div class="pick"><button data-a="r44">Robinson R44<small>light · piston engine · 1 t · 2 blades</small></button><button data-a="mi8">Mil Mi-8<small>heavy · twin turbine · 10.5 t · 5 blades</small></button></div>
 <div>Choose a helicopter to take the controls (enables sound)<br><small>Mouse = cyclic · W/S collective · A/D pedals · hold <b>Alt</b> to look around and use switches — aim at any switch or gauge to learn what it does.</small></div></div>
 <div id="help" class="box"><b style="color:#ffd166">Controls</b> <small>(H hides panels)</small><br>
@@ -973,7 +973,7 @@ const GUIDE={
  amm:'<b>Ammeter</b>: current into (+) or out of (−) the battery. Right of zero = charging, which is normal right after start, then it settles near zero. Left of zero with the engine running = the alternator is off or has failed, and the battery is draining.',
  hobbs:'<b>Hobbs meter</b>: counts engine running hours (to tenths of an hour). Used for maintenance intervals and for renting the aircraft. It does not affect flying.'};
 const MAN=`<button id="mx">Close (M)</button><h2>R44 Pilot's Manual — how the systems work</h2>
-<p>A simplified engineering guide to the Robinson R44 as modelled in this trainer. It is for learning only, not a replacement for the real Pilot's Operating Handbook.</p>
+<p>A simplified engineering guide to the Robinson R44 as modelled in this simulator. It is for learning only, not a replacement for the real Pilot's Operating Handbook.</p>
 <h3>1 · The drive train: from engine to rotor</h3>
 <p>The <b>Lycoming O-540</b> six-cylinder piston engine lies flat behind the cabin. Its power travels like this:</p>
 <p><b>Engine → lower pulley (sheave) → V-belts → upper sheave → sprag (one-way) clutch → main gearbox → main rotor</b>, with a long drive shaft through the tail boom to the <b>tail rotor</b> gearbox. Engine and rotor are geared together, which is why the tachometer shows both as a percentage: at 100 % the engine turns about 2,718 rpm and the main rotor about 408 rpm.</p>
@@ -1032,7 +1032,7 @@ const SVG8={
   ln('M160,115H178')+ln('M300,115H318')+ln('M450,115H478')+ln('M620,115H700')+'<text class="y" x="640" y="104">exhaust</text>'+
   '<path d="M40,60 H450" stroke="#ffd166" stroke-width="3"/><text class="y" x="160" y="50">gas generator spool: speed = Ng</text><path d="M480,170 H620" stroke="#8fd3ff" stroke-width="3"/><text class="t" x="482" y="192">power shaft: speed ∝ Nr</text><text class="s" x="40" y="214">No mechanical link between the two spools, only hot gas. That is why the engine can idle while the</text><text class="s" x="40" y="230">rotor is held by the brake, and why the Mi-8 needs no clutch.</text>')};
 const MAN8=`<button id="mx">Close (M)</button><h2>Mil Mi-8 Pilot's Manual — how the systems work</h2>
-<p>A simplified engineering guide to the Mi-8MTV as modelled in this trainer. It is for learning only, not the real flight manual.</p>
+<p>A simplified engineering guide to the Mi-8MTV as modelled in this simulator. It is for learning only, not the real flight manual.</p>
 <h3>1 · Meet the Mi-8: what changes from the R44</h3>
 <dl><dt>Weight</dt><dd>About 10.5 t here (13 t maximum), ten times the R44. Everything happens more slowly and needs anticipation.</dd>
 <dt>Rotor</dt><dd>Five blades, 21.3 m across, 192 rpm (shown as 95 %). Articulated: each blade has its own flapping and lead-lag hinges, so there is no mast bumping, and the blades droop visibly when stopped. It turns <b>clockwise</b> seen from above, the opposite of the R44, so you hold <b>right</b> pedal in a hover.</dd>
