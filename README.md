@@ -22,6 +22,7 @@ A browser-based helicopter flying simulator built with three.js. Learn what ever
 - Built-in pilot's manual (press **M**) with pictures, diagrams and a guide to reading every round instrument
 - Flight model with rotor RPM, governors, ground effect, translational lift, torque, vortex ring state, turbine lag and autorotation
 - Rotor-driven handling: damping comes from the rotor disk itself (no artificial damping), gyroscopic pitch↔roll cross-coupling, flap-back that grows with collective, dynamic inflow and realistic inertias. Optional limited-authority SAS / attitude hold (HeliSAS-style on the R44, AP-34 with heading hold on the Mi-8) that works through the controls, off by default
+- A river-valley world: a town of Soviet-era panel blocks and private houses with tin roofs, a ferro-alloy plant with smoking chimneys, a railway with a freight train, a bridge, moving traffic, forests, vineyards, a hilltop church and a high-voltage line; windows and street lights come on at night
 - Day/night cycle with a moving sun, golden-hour sunsets, stars, moon, sun glare and lens flare, and airfield lights at night (time of day and cycle speed in the side panel, **N** = +1 hour)
 - Glossy clear-coated paint and polished metal with live sky reflections, a reflective lake
 - HD procedural textures and normal maps (rivets, panel seams, camouflage, concrete, asphalt, brushed metal)
