@@ -21,6 +21,8 @@ A browser-based helicopter flying simulator built with three.js. Learn what ever
 - Hover over (or aim at, with Alt) any switch or gauge to learn what it does
 - Built-in pilot's manual (press **M**) with pictures, diagrams and a guide to reading every round instrument
 - Flight model with rotor RPM, governors, ground effect, translational lift, torque, vortex ring state, turbine lag and autorotation
+- Day/night cycle with a moving sun, golden-hour sunsets, stars, moon, sun glare and lens flare, and airfield lights at night (time of day and cycle speed in the side panel, **N** = +1 hour)
+- Glossy clear-coated paint and polished metal with live sky reflections, a reflective lake
 - HD procedural textures and normal maps (rivets, panel seams, camouflage, concrete, asphalt, brushed metal)
 - Procedural engine, turbine, rotor and tail-rotor sound
 
@@ -36,6 +38,7 @@ A browser-based helicopter flying simulator built with three.js. Learn what ever
 | V / C | 1st ⇄ 3rd person / cycle cameras |
 | M | Pilot's manual |
 | Space / X | Centre cyclic / pedals |
+| N | Advance the time of day by one hour |
 | Esc | Release the mouse |
 
 Runs in Chrome or Edge on a desktop. Needs an internet connection to load three.js from a CDN.
