@@ -6,7 +6,8 @@ A browser-based Robinson R44 helicopter training simulator built with three.js.
 
 - Start the helicopter from cold, switch by switch: battery, fuel, mixture, magnetos, starter, clutch, governor
 - Hover over (or aim at, with Alt) any switch or gauge to learn what it does
-- Built-in pilot's manual (press **M**) explaining the drive train, governor, magnetos, carb ice and more
+- Built-in pilot's manual (press **M**) with engine pictures, diagrams and a guide to reading every round instrument
+- HD procedural textures and normal maps (rivets, panel seams, concrete joints, asphalt, brushed metal)
 - Flight model with rotor RPM, ground effect, translational lift, torque, vortex ring state and autorotation
 - Procedural engine, rotor and tail-rotor sound
 

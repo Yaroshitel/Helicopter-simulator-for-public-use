@@ -38,7 +38,9 @@ Throttle twist <kbd>T</kbd> open / <kbd>G</kbd> close<br>
 Pause <kbd>P</kbd> · Reset <kbd>Backspace</kbd> · <b>Manual <kbd>M</kbd></b> · Gamepad supported</div>
 <div id="mode" class="box" style="left:50%;top:12px;transform:translateX(-50%);font-weight:600"></div>
 <div id="man" class="box" hidden style="left:50%;top:50%;transform:translate(-50%,-50%);width:min(780px,92vw);max-height:86vh;overflow:auto;z-index:8;font-size:13.5px;line-height:1.55;padding:18px 22px;background:rgba(10,14,20,.97)"></div>
-<style>#man h2{color:#ffd166;margin:0 0 6px;font-size:20px}#man h3{color:#ffd166;margin:16px 0 4px;font-size:15px}#man p{margin:4px 0 8px}#man .ex{background:#152030;border-left:3px solid #8fd3ff;padding:6px 10px;margin:6px 0}#man dt{font-weight:600;color:#e8eef5;margin-top:6px}#man dd{margin:0 0 4px 14px;color:#b8c4d2}#man button{float:right;background:#1b2533;color:#e8eef5;border:1px solid #3a4a5c;border-radius:6px;padding:4px 10px;cursor:pointer}</style>
+<style>#man h2{color:#ffd166;margin:0 0 6px;font-size:20px}#man h3{color:#ffd166;margin:16px 0 4px;font-size:15px}#man p{margin:4px 0 8px}#man .ex{background:#152030;border-left:3px solid #8fd3ff;padding:6px 10px;margin:6px 0}#man dt{font-weight:600;color:#e8eef5;margin-top:6px}#man dd{margin:0 0 4px 14px;color:#b8c4d2}#man figure{margin:10px 0}#man img{max-width:100%;display:block;border-radius:6px;border:1px solid #2c3a4a}#man figcaption{color:#9fb0c4;font-size:12px;margin-top:4px}
+#man .pics{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}#man .gg{display:grid;grid-template-columns:110px 1fr;gap:14px;align-items:start;margin:12px 0}#man .gg img{width:110px;border-radius:50%}
+#man button{float:right;background:#1b2533;color:#e8eef5;border:1px solid #3a4a5c;border-radius:6px;padding:4px 10px;cursor:pointer}</style>
 <div id="xh" hidden style="position:fixed;left:50%;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border:2px solid #ffd166;border-radius:50%;box-shadow:0 0 0 1px #000;pointer-events:none;z-index:4"></div>
 <div id="stick" class="box" style="right:12px;bottom:12px;width:90px;height:90px;padding:0"><div style="position:absolute;left:50%;top:0;bottom:0;border-left:1px solid #445"></div><div style="position:absolute;top:50%;left:0;right:0;border-top:1px solid #445"></div><div id="sdot" style="position:absolute;width:10px;height:10px;border-radius:5px;background:#ffd166;margin:-5px 0 0 -5px"></div><div style="position:absolute;left:4px;top:2px;font-size:10px;color:#889">CYCLIC</div></div>
 <div id="panel" class="box"><h3>Lesson</h3>
@@ -72,7 +74,7 @@ const sunDir=new V().setFromSphericalCoords(1,52*PI/180,150*PI/180);su.sunPositi
 const pm=new THREE.PMREMGenerator(renderer),es=new THREE.Scene();es.add(sky);scene.environment=pm.fromScene(es).texture;scene.add(sky);
 scene.fog=new THREE.FogExp2(0xb9cadb,0.00016);
 const sun=new THREE.DirectionalLight(0xfff0dc,3.4);sun.castShadow=true;sun.shadow.mapSize.set(4096,4096);
-Object.assign(sun.shadow.camera,{left:-22,right:22,top:22,bottom:-22,near:1,far:400});sun.shadow.bias=-0.0002;sun.shadow.normalBias=0.02;
+Object.assign(sun.shadow.camera,{left:-14,right:14,top:14,bottom:-14,near:1,far:400});sun.shadow.bias=-0.0002;sun.shadow.normalBias=0.02;
 scene.add(sun,sun.target,new THREE.HemisphereLight(0xcfe4ff,0x56603f,0.7));
 
 /* ---------- textures ---------- */
@@ -80,16 +82,58 @@ function ctex(w,h,draw,rep){const c=document.createElement('canvas');c.width=w;c
  const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=8;
  if(rep){t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(rep,rep)}return t}
 const speck=(c,w,h,base,n,lo,rng)=>{c.fillStyle=base;c.fillRect(0,0,w,h);for(let i=0;i<n;i++){const v=lo+Math.random()*rng|0;c.fillStyle=`rgb(${v},${v},${v})`;c.fillRect(Math.random()*w,Math.random()*h,1+Math.random()*2,1+Math.random()*3)}};
-const grassTex=ctex(512,512,(c,w,h)=>speck(c,w,h,'#999',70000,100,140),900);
-const concTex=ctex(512,512,(c,w,h)=>{speck(c,w,h,'#b5b3ad',30000,150,80);c.strokeStyle='#6d6b66';c.lineWidth=3;for(let i=0;i<=4;i++){c.beginPath();c.moveTo(i*128,0);c.lineTo(i*128,h);c.moveTo(0,i*128);c.lineTo(w,i*128);c.stroke()}},10);
-const padTex=ctex(1024,1024,(c,w)=>{speck(c,w,w,'#9e9c97',40000,130,90);c.strokeStyle='#f2f2ee';c.lineWidth=26;c.beginPath();c.arc(512,512,440,0,7);c.stroke();
- c.strokeStyle='#e7c21b';c.lineWidth=14;c.beginPath();c.arc(512,512,470,0,7);c.stroke();c.fillStyle='#f2f2ee';c.fillRect(330,280,70,464);c.fillRect(624,280,70,464);c.fillRect(400,476,224,70)});
-const rwyTex=ctex(256,2048,(c,w,h)=>{speck(c,w,h,'#3c3d3f',40000,40,50);c.fillStyle='#e8e8e8';for(let y=40;y<h;y+=160)c.fillRect(124,y,8,90);c.fillRect(8,0,6,h);c.fillRect(w-14,0,6,h)});
-const paintTex=ctex(2048,512,(c,w,h)=>{c.fillStyle='#f4f4f2';c.fillRect(0,0,w,h);
+const rnd=Math.random;
+// normal map from a canvas' brightness (tileable): gives surfaces real relief under the sun
+function nmap(t,str,rep){const src=t.image||t,w=src.width,h=src.height,d=src.getContext('2d').getImageData(0,0,w,h).data,c=document.createElement('canvas');c.width=w;c.height=h;
+ const x=c.getContext('2d'),o=x.createImageData(w,h),od=o.data,H=(i,j)=>d[(((j+h)%h)*w+((i+w)%w))*4];
+ for(let j=0;j<h;j++)for(let i=0;i<w;i++){const dx=(H(i+1,j)-H(i-1,j))*str/255,dy=(H(i,j+1)-H(i,j-1))*str/255,l=Math.sqrt(dx*dx+dy*dy+1),k=(j*w+i)*4;od[k]=(.5-dx/l*.5)*255;od[k+1]=(.5+dy/l*.5)*255;od[k+2]=(.5+.5/l)*255;od[k+3]=255}
+ x.putImageData(o,0,0);const n=new THREE.CanvasTexture(c);n.anisotropy=8;if(rep){n.wrapS=n.wrapT=THREE.RepeatWrapping;n.repeat.copy(rep.isVector2?rep:new THREE.Vector2(rep,rep))}return n}
+// grass: clumps + ~90k individual blades
+const grassTex=ctex(1024,1024,(c,w,h)=>{c.fillStyle='#8a8a8a';c.fillRect(0,0,w,h);
+ for(let i=0;i<9000;i++){const v=90+rnd()*90|0;c.fillStyle=`rgba(${v},${v},${v},.35)`;c.beginPath();c.arc(rnd()*w,rnd()*h,4+rnd()*14,0,7);c.fill()}
+ for(let i=0;i<90000;i++){const x=rnd()*w,y=rnd()*h,l=3+rnd()*7,a=-PI/2+(rnd()-.5)*1.2,v=80+rnd()*150|0;c.strokeStyle=`rgb(${v},${v},${v})`;c.lineWidth=.6+rnd()*1.2;c.beginPath();c.moveTo(x,y);c.lineTo(x+Math.cos(a)*l,y+Math.sin(a)*l);c.stroke()}},900);
+const grassN=nmap(grassTex,2.5,900);
+// concrete apron: aggregate, oil stains, hairline cracks, expansion joints every 2.25 m
+const concTex=ctex(1024,1024,(c,w,h)=>{speck(c,w,h,'#b3b0aa',160000,140,90);
+ for(let i=0;i<60;i++){const x=rnd()*w,y=rnd()*h,r=20+rnd()*120,g=c.createRadialGradient(x,y,0,x,y,r);g.addColorStop(0,`rgba(${70+rnd()*40|0},${65+rnd()*35|0},55,${.08+rnd()*.12})`);g.addColorStop(1,'rgba(0,0,0,0)');c.fillStyle=g;c.fillRect(x-r,y-r,2*r,2*r)}
+ c.strokeStyle='rgba(60,58,55,.7)';c.lineWidth=1.2;for(let k=0;k<14;k++){let x=rnd()*w,y=rnd()*h;c.beginPath();c.moveTo(x,y);for(let s=0;s<30;s++){x+=(rnd()-.5)*18;y+=(rnd()-.5)*18;c.lineTo(x,y)}c.stroke()}
+ c.strokeStyle='#5d5b56';c.lineWidth=5;for(let i=0;i<=4;i++){c.beginPath();c.moveTo(i*256,0);c.lineTo(i*256,h);c.moveTo(0,i*256);c.lineTo(w,i*256);c.stroke()}},10);
+const concN=nmap(concTex,3,10);
+// helipad: concrete + worn paint + skid scuffs
+const padTex=ctex(2048,2048,(c,w)=>{for(let i=0;i<2;i++)for(let j=0;j<2;j++)c.drawImage(concTex.image,i*1024,j*1024);
+ c.save();c.globalAlpha=.92;c.strokeStyle='#f2f2ee';c.lineWidth=52;c.beginPath();c.arc(1024,1024,880,0,7);c.stroke();c.strokeStyle='#e7c21b';c.lineWidth=28;c.beginPath();c.arc(1024,1024,940,0,7);c.stroke();
+ c.fillStyle='#f2f2ee';c.fillRect(660,560,140,928);c.fillRect(1248,560,140,928);c.fillRect(800,952,448,140);c.restore();
+ for(let i=0;i<90000;i++){const v=150+rnd()*60|0;c.fillStyle=`rgba(${v},${v-2},${v-6},.3)`;c.beginPath();c.arc(rnd()*w,rnd()*w,.5+rnd()*1.1,0,7);c.fill()}
+ c.strokeStyle='rgba(40,38,36,.12)';for(let i=0;i<30;i++){c.lineWidth=6+rnd()*10;c.beginPath();const a=rnd()*7,r=200+rnd()*600;c.arc(1024,1024,r,a,a+.3+rnd()*.5);c.stroke()}});
+const padN=nmap(padTex,2.5);
+// asphalt runway: aggregate, rubber deposits, patch repairs, markings
+const rwyTex=ctex(512,4096,(c,w,h)=>{speck(c,w,h,'#3a3b3d',300000,25,70);
+ for(let i=0;i<90;i++){c.fillStyle='rgba(12,12,13,.18)';c.fillRect(170+rnd()*40,rnd()*h,130+rnd()*40,40+rnd()*200)}
+ for(let i=0;i<40;i++){const v=50+rnd()*20|0;c.fillStyle=`rgba(${v},${v},${v+2},.5)`;c.fillRect(rnd()*w,rnd()*h,30+rnd()*80,20+rnd()*60)}
+ c.fillStyle='rgba(235,235,235,.92)';for(let y=380;y<h-380;y+=320)c.fillRect(248,y,16,180);c.fillRect(16,0,12,h);c.fillRect(w-28,0,12,h);
+ for(let k=0;k<8;k++){c.fillRect(50+k*52,30,30,260);c.fillRect(50+k*52,h-290,30,260)}
+ for(let i=0;i<30000;i++){c.fillStyle='rgba(58,59,61,.7)';c.fillRect(rnd()*w,rnd()*h,1+rnd()*2,1+rnd()*2)}});
+const rwyN=nmap(rwyTex,2);
+// helicopter paint + a separate relief map with panel seams and rivet rows
+const SEAMS=[.325,.50,.63,.70],RIVU=[.24,.325,.41,.50,.63,.70,.80,.90];
+const paintTex=ctex(4096,1024,(c,w,h)=>{c.fillStyle='#f4f4f2';c.fillRect(0,0,w,h);
  const band=(v0,v1,col)=>{c.fillStyle=col;c.fillRect(0,(1-v1)*h,w,(v1-v0)*h)};
  band(.950,.968,'#a3121b');band(.944,.948,'#1d2a5a');band(.532,.550,'#a3121b');band(.552,.556,'#1d2a5a');
- c.strokeStyle='rgba(60,60,60,.65)';c.lineWidth=2;
- for(const u of[.325,.50,.63,.70]){c.beginPath();c.moveTo(u*w,h*.02);c.lineTo(u*w,h*.20);c.moveTo(u*w,h*.30);c.lineTo(u*w,h*.48);c.stroke()}});
+ const g=c.createLinearGradient(0,h*.12,0,h*.38);g.addColorStop(0,'rgba(95,85,65,0)');g.addColorStop(.5,'rgba(95,85,65,.10)');g.addColorStop(1,'rgba(95,85,65,0)');c.fillStyle=g;c.fillRect(0,h*.12,w,h*.26);
+ for(let i=0;i<3000;i++){c.fillStyle=`rgba(120,110,90,${rnd()*.05})`;c.fillRect(rnd()*w,h*(.15+rnd()*.2),1+rnd()*3,1+rnd()*3)}
+ c.strokeStyle='rgba(60,60,60,.65)';c.lineWidth=4;
+ for(const u of SEAMS){c.beginPath();c.moveTo(u*w,h*.02);c.lineTo(u*w,h*.20);c.moveTo(u*w,h*.30);c.lineTo(u*w,h*.48);c.stroke()}
+ c.fillStyle='rgba(150,150,150,.35)';for(const u of RIVU)for(let y=4;y<h;y+=16){c.beginPath();c.arc(u*w,y,2.2,0,7);c.fill()}});
+const paintN=nmap(ctex(4096,1024,(c,w,h)=>{c.fillStyle='#808080';c.fillRect(0,0,w,h);c.strokeStyle='#3a3a3a';c.lineWidth=5;
+ for(const u of SEAMS){c.beginPath();c.moveTo(u*w,h*.02);c.lineTo(u*w,h*.20);c.moveTo(u*w,h*.30);c.lineTo(u*w,h*.48);c.stroke()}
+ for(const y of[.06,.25,.46,.54,.75,.94]){c.beginPath();c.moveTo(0,y*h);c.lineTo(w,y*h);c.stroke()}
+ c.fillStyle='#d8d8d8';for(const u of RIVU)for(let y=4;y<h;y+=16){c.beginPath();c.arc(u*w,y,2.6,0,7);c.fill()}
+ for(const y of[.06,.25,.46,.54,.75,.94])for(let x=8;x<w;x+=18){c.beginPath();c.arc(x,y*h+9,2.4,0,7);c.fill()}}),3);
+// brushed metal (roughness), seat fabric, plastic grain, corrugated hangar sheet
+const brushTex=ctex(512,512,(c,w,h)=>{c.fillStyle='#808080';c.fillRect(0,0,w,h);for(let i=0;i<4000;i++){const v=95+rnd()*70|0;c.strokeStyle=`rgba(${v},${v},${v},.5)`;c.lineWidth=rnd()*1.5;const y=rnd()*h;c.beginPath();c.moveTo(0,y);c.lineTo(w,y+(rnd()-.5)*4);c.stroke()}},1);brushTex.colorSpace=THREE.NoColorSpace;
+const fabTex=ctex(256,256,(c,w,h)=>{c.fillStyle='#7a5c40';c.fillRect(0,0,w,h);for(let y=0;y<h;y+=4)for(let x=0;x<w;x+=4){c.fillStyle=((x+y)/4)%2?'rgba(255,235,210,.10)':'rgba(0,0,0,.14)';c.fillRect(x,y,4,4)}for(let i=0;i<3000;i++){c.fillStyle=`rgba(0,0,0,${rnd()*.08})`;c.fillRect(rnd()*w,rnd()*h,2,2)}},4);
+const fabN=nmap(fabTex,4,4),grainN=nmap(ctex(512,512,(c,w,h)=>speck(c,w,h,'#808080',60000,90,80)),1.2,6);
+const corrN=nmap(ctex(512,64,(c,w,h)=>{for(let x=0;x<w;x++){const v=128+100*Math.sin(x/w*PI*32)|0;c.fillStyle=`rgb(${v},${v},${v})`;c.fillRect(x,0,1,h)}}),6,new THREE.Vector2(4,1));
 const sockTex=ctex(256,64,(c)=>{for(let i=0;i<5;i++){c.fillStyle=i%2?'#f4f4f4':'#ff5a14';c.fillRect(i*51.2,0,52,64)}});
 const blurTex=ctex(512,512,(c)=>{const g=c.createRadialGradient(256,256,20,256,256,256);g.addColorStop(0,'rgba(20,20,20,0)');g.addColorStop(.12,'rgba(30,30,30,.5)');g.addColorStop(.9,'rgba(40,40,40,.35)');g.addColorStop(.97,'rgba(200,40,30,.5)');g.addColorStop(1,'rgba(0,0,0,0)');c.fillStyle=g;c.fillRect(0,0,512,512)});
 
@@ -107,10 +151,10 @@ function groundH(x,z){const d=Math.hypot(x,z),k=sstep(420,1000,d);if(k<=0)return
   c.setRGB(.16+.12*m,.24+.1*m,.08+.04*m);c.lerp(new THREE.Color(.36,.33,.2),sstep(.4,.7,fbm(x*.003,z*.003,3)));
   c.lerp(new THREE.Color(.33,.31,.29),sstep(.12,.3,sl));c.lerp(new THREE.Color(.92,.93,.96),sstep(230,300,y+m*40)*sstep(.4,.2,sl));col.push(c.r,c.g,c.b)}
  g.setAttribute('color',new THREE.Float32BufferAttribute(col,3));
- const t=new THREE.Mesh(g,new THREE.MeshStandardMaterial({vertexColors:true,map:grassTex,roughness:.97}));t.receiveShadow=true;scene.add(t)}
-const flat=(w,d,tex,x,y,z,rep)=>{const m=new THREE.Mesh(new THREE.PlaneGeometry(w,d),new THREE.MeshStandardMaterial({map:tex,roughness:.9}));m.rotation.x=-PI/2;m.position.set(x,y,z);m.receiveShadow=true;scene.add(m);return m};
-flat(90,90,concTex,0,.01,0);flat(26,26,padTex,0,.02,0);
-{const r=flat(30,620,rwyTex,0,.015,-170);r.rotation.z=PI/2}
+ const t=new THREE.Mesh(g,new THREE.MeshStandardMaterial({vertexColors:true,map:grassTex,normalMap:grassN,normalScale:new THREE.Vector2(.9,.9),roughness:.97}));t.receiveShadow=true;scene.add(t)}
+const flat=(w,d,tex,x,y,z,nm)=>{const m=new THREE.Mesh(new THREE.PlaneGeometry(w,d),new THREE.MeshStandardMaterial({map:tex,normalMap:nm,roughness:.88}));m.rotation.x=-PI/2;m.position.set(x,y,z);m.receiveShadow=true;scene.add(m);return m};
+flat(90,90,concTex,0,.01,0,concN);flat(26,26,padTex,0,.02,0,padN);
+{const r=flat(30,620,rwyTex,0,.015,-170,rwyN);r.rotation.z=PI/2}
 // trees (instanced)
 {const fol=[];for(let k=0;k<3;k++){const g=new THREE.ConeGeometry(2.6-k*.6,4.2,14,3);g.translate(0,3.2+k*2.1,0);fol.push(g)}
  const merge=gs=>{let P=[],I=[],o=0;for(const g of gs){const gi=g.index?g:g;const pa=g.attributes.position.array;for(let i=0;i<pa.length;i+=3)P.push(pa[i]+(Math.random()-.5)*.35,pa[i+1]+(Math.random()-.5)*.3,pa[i+2]+(Math.random()-.5)*.35);for(const ix of g.index.array)I.push(ix+o);o+=pa.length/3}
@@ -129,7 +173,7 @@ flat(90,90,concTex,0,.01,0);flat(26,26,padTex,0,.02,0);
 // hangar, building, windsock
 const STD=(c,r=.8,m=0)=>new THREE.MeshStandardMaterial({color:c,roughness:r,metalness:m});
 function box(w,h,d,mat,x,y,z,p=scene){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);m.position.set(x,y,z);m.castShadow=m.receiveShadow=true;p.add(m);return m}
-{box(30,7,22,STD(0xb8bcc0,.6,.3),-48,3.5,40);const roof=new THREE.Mesh(new THREE.CylinderGeometry(11.5,11.5,30,48,1,false,0,PI),STD(0x8d9399,.5,.6));roof.rotation.z=PI/2;roof.position.set(-48,7,40);roof.castShadow=true;scene.add(roof);
+{const hw=STD(0xb8bcc0,.55,.35);hw.normalMap=corrN;box(30,7,22,hw,-48,3.5,40);const hr=STD(0x8d9399,.45,.6);hr.normalMap=corrN;const roof=new THREE.Mesh(new THREE.CylinderGeometry(11.5,11.5,30,96,1,false,0,PI),hr);roof.rotation.z=PI/2;roof.position.set(-48,7,40);roof.castShadow=true;scene.add(roof);
  box(26,6.4,.2,STD(0x3a4048,.5,.4),-48,3.2,28.9);box(10,4,8,STD(0xe6e2d8),40,2,45);box(10.4,.3,8.4,STD(0x7a3a2a),40,4.1,45)}
 const sock=new THREE.Group();sock.position.set(24,0,-16);scene.add(sock);
 {const pole=new THREE.Mesh(new THREE.CylinderGeometry(.05,.07,6,12),STD(0xdddddd,.4,.6));pole.position.y=3;pole.castShadow=true;sock.add(pole)}
@@ -142,6 +186,11 @@ const M={paint:new THREE.MeshPhysicalMaterial({map:paintTex,roughness:.32,clearc
  glass:new THREE.MeshPhysicalMaterial({color:0xa9c0cc,transparent:true,opacity:.14,roughness:.03,clearcoat:1,side:THREE.DoubleSide,depthWrite:false,envMapIntensity:2.2}),
  chrome:STD(0xe0e0e0,.15,1),steel:STD(0x8a8f96,.35,.85),dark:STD(0x1c1e21,.55,.3),black:STD(0x0c0c0d,.4,.2),eng:STD(0x50555c,.45,.7),
  blade:new THREE.MeshStandardMaterial({vertexColors:true,roughness:.35,metalness:.4}),seat:STD(0x5a4330,.85),red:STD(0xb01818,.4,.2),gold:STD(0xb08a3a,.35,.8)};
+// HD surface maps on the helicopter materials
+M.paint.normalMap=paintN;M.paint.normalScale.set(.7,.7);M.paint.clearcoatNormalMap=paintN;M.paint.clearcoatNormalScale.set(.5,.5);
+for(const k of['steel','chrome','eng'])M[k].roughnessMap=brushTex;M.steel.roughness=.8;M.chrome.roughness=.32;M.eng.roughness=.9;
+Object.assign(M.seat,{map:fabTex,normalMap:fabN});M.seat.color.set(0xffffff);
+for(const k of['dark','black']){M[k].normalMap=grainN;M[k].normalScale.set(.35,.35)}M.inner.normalMap=grainN;
 const heli=new THREE.Group(),model=new THREE.Group();model.position.y=-1.15;heli.add(model);scene.add(heli);
 function mk(g,m,x=0,y=0,z=0,p=model){const o=new THREE.Mesh(g,m);o.position.set(x,y,z);o.castShadow=o.receiveShadow=true;p.add(o);return o}
 function cr(K,z,k){let i=0;while(i<K.length-2&&z>K[i+1][0])i++;const p=j=>K[clamp(j,0,K.length-1)],z0=p(i)[0],h=p(i+1)[0]-z0,t=clamp((z-z0)/h,0,1);
@@ -153,31 +202,46 @@ function loft(K,N,Mn,o={}){const nx=o.nx||2.6,nt=o.nt||2.2,nb=o.nb||3.2,cf=o.cf?
    P.push(hw*Math.sign(c)*Math.pow(Math.abs(c),2/nx),s>=0?yc+(yt-yc)*Math.pow(s,2/nt):yc-(yc-yb)*Math.pow(-s,2/nb),z);UV.push(t,j/Mn)}}
  for(let i=0;i<N;i++)for(let j=0;j<Mn;j++){const a=i*(Mn+1)+j,b=a+Mn+1,g=o.mask?o.mask((zs[i]+zs[i+1])/2,(j+.5)/Mn*2*PI):0;G[g].push(a,a+1,b,b,a+1,b+1)}
  const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(P,3));geo.setAttribute('uv',new THREE.Float32BufferAttribute(UV,2));
- geo.setIndex([...G[0],...G[1]]);geo.addGroup(0,G[0].length,0);geo.addGroup(G[0].length,G[1].length,1);geo.computeVertexNormals();return geo}
+ geo.setIndex([...G[0],...G[1]]);geo.addGroup(0,G[0].length,0);geo.addGroup(G[0].length,G[1].length,1);geo.computeVertexNormals();
+ const nn=geo.attributes.normal;for(let i=0;i<=N;i++){const a=i*(Mn+1),b=a+Mn,v=new V(nn.getX(a)+nn.getX(b),nn.getY(a)+nn.getY(b),nn.getZ(a)+nn.getZ(b)).normalize();nn.setXYZ(a,v.x,v.y,v.z);nn.setXYZ(b,v.x,v.y,v.z)}  // smooth the seam
+ return geo}
+function secPt(K,z,th,o={}){const nx=o.nx||2.6,nt=o.nt||2.2,nb=o.nb||3.2,cf=o.cf??.42,hw=Math.max(cr(K,z,1),.002),yt=cr(K,z,2),yb=cr(K,z,3),yc=yb+cf*(yt-yb),c=Math.cos(th),s=Math.sin(th);
+ return new V(hw*Math.sign(c)*Math.pow(Math.abs(c),2/nx),s>=0?yc+(yt-yc)*Math.pow(s,2/nt):yc-(yc-yb)*Math.pow(-s,2/nb),z)}
 // cabin
 const cabK=[[-2.38,.01,1.02,.99],[-2.3,.30,1.22,.78],[-2.1,.50,1.45,.62],[-1.8,.60,1.66,.54],[-1.4,.65,1.84,.50],[-.9,.66,1.95,.49],[-.4,.65,1.98,.50],[0,.58,1.96,.56],[.15,.42,1.90,.70],[.24,.02,1.75,.95]];
 const cabMask=(z,th)=>{const s=Math.sin(th),c=Math.cos(th);
  if(z<-1.2&&z>-2.34&&s>-.42&&Math.abs(th-PI/2)>.02)return 1;
  if(Math.abs(c)>.42&&s>-.05&&s<.8&&((z>-1.12&&z<-.30)||(z>-.24&&z<.02)))return 1;return 0};
-const cab=loft(cabK,180,128,{mask:cabMask});
+const cab=loft(cabK,340,256,{mask:cabMask});
 mk(cab,[M.paint,M.hide]);{const g=mk(cab,[M.hide,M.glass]);g.castShadow=false;mk(cab,[M.inner,M.hide]).castShadow=false}
+// window & door frames, centre post, handles (follow the cabin surface exactly)
+{const fr=pts=>mk(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),pts.length*3,.011,12),M.dark),
+  along=(z0,z1,th,n=80)=>Array.from({length:n+1},(_,i)=>secPt(cabK,z0+(z1-z0)*i/n,th)),around=(z,t0,t1,n=80)=>Array.from({length:n+1},(_,i)=>secPt(cabK,z,t0+(t1-t0)*i/n));
+ for(const z of[-1.16,-.27,.05]){fr(around(z,-.06,.93));fr(around(z,PI-.93,PI+.06))}
+ for(const th of[-.05,.92,PI-.92,PI+.05])fr(along(-1.16,.05,th));
+ fr(around(-1.2,-.44,PI+.44,160));fr(along(-2.33,-1.2,PI/2));fr(along(-2.33,-1.2,-.44));fr(along(-2.33,-1.2,PI+.44));
+ for(const z of[-.5,.0])for(const sd of[1,-1]){const p=secPt(cabK,z,sd>0?.28:PI-.28);mk(new RB(.025,.022,.11,3,.008),M.chrome,p.x+sd*.012,p.y,p.z)}}
 // mast fairing / upper cowl, tailcone
-mk(loft([[-.6,.02,1.97,1.9],[-.35,.30,2.2,1.86],[0,.36,2.3,1.82],[.5,.38,2.2,1.38],[1.0,.33,1.95,1.25],[1.5,.27,1.72,1.16]],90,72,{nx:2.4,nt:2.4,nb:2.4,cf:.3}),M.paint);
-mk(loft([[1.25,.30,1.74,1.10],[6.5,.085,1.71,1.54]],120,48,{nx:2,nt:2,nb:2,cf:.5}),M.paint);
+mk(loft([[-.6,.02,1.97,1.9],[-.35,.30,2.2,1.86],[0,.36,2.3,1.82],[.5,.38,2.2,1.38],[1.0,.33,1.95,1.25],[1.5,.27,1.72,1.16]],180,144,{nx:2.4,nt:2.4,nb:2.4,cf:.3}),M.paint);
+mk(loft([[1.25,.30,1.74,1.10],[6.5,.085,1.71,1.54]],240,96,{nx:2,nt:2,nb:2,cf:.5}),M.paint);
+// small details: roof antenna, belly antenna, cowl air scoops, tail-cone attach ring
+mk(new THREE.CylinderGeometry(.004,.008,.35,8),M.black,0,2.12,-.9).rotation.x=-.5;mk(new THREE.CylinderGeometry(.004,.006,.25,8),M.black,0,.42,-.3);
+for(const sd of[-1,1])mk(new THREE.SphereGeometry(.13,40,24,0,PI).rotateY(sd*PI/2).scale(.35,.6,1.1),M.paint,sd*.34,1.55,.85);
+mk(new THREE.TorusGeometry(.29,.012,12,96),M.steel,0,1.42,1.27);
 // engine (O-540 flat six)
 {const e=new THREE.Group();e.position.set(0,.98,.66);model.add(e);mk(new RB(.34,.26,.78,4,.04),M.eng,0,0,0,e);
  const pr=[new THREE.Vector2(.062,0)];for(let f=0;f<12;f++){const y=.012+f*.016;pr.push(new THREE.Vector2(.062,y),new THREE.Vector2(.092,y+.002),new THREE.Vector2(.092,y+.007),new THREE.Vector2(.062,y+.009))}pr.push(new THREE.Vector2(.06,.21));
- const cyl=new THREE.LatheGeometry(pr,28);
+ const cyl=new THREE.LatheGeometry(pr,56);
  for(const sd of[-1,1])for(let k=0;k<3;k++){const z=-.24+k*.22+sd*.05,c=mk(cyl,M.eng,sd*.16,.02,z,e);c.rotation.z=-sd*PI/2;
   mk(new RB(.1,.13,.12,2,.02),M.eng,sd*.42,.02,z,e);
-  const ex=new THREE.CatmullRomCurve3([new V(sd*.42,-.06,z),new V(sd*.4,-.2,z+.05),new V(sd*.3,-.28,.32),new V(sd*.2,-.3,.6)]);mk(new THREE.TubeGeometry(ex,24,.022,10),M.gold,0,0,0,e)}
- mk(new THREE.CylinderGeometry(.34,.34,.18,48).rotateX(PI/2),M.dark,0,.05,-.48,e);
+  const ex=new THREE.CatmullRomCurve3([new V(sd*.42,-.06,z),new V(sd*.4,-.2,z+.05),new V(sd*.3,-.28,.32),new V(sd*.2,-.3,.6)]);mk(new THREE.TubeGeometry(ex,64,.022,16),M.gold,0,0,0,e)}
+ mk(new THREE.CylinderGeometry(.34,.34,.18,96).rotateX(PI/2),M.dark,0,.05,-.48,e);
  const sh=new THREE.LatheGeometry([0,1,2,3,4].flatMap(i=>[new THREE.Vector2(.13,i*.02),new THREE.Vector2(.11,i*.02+.01)]),40);sh.rotateX(PI/2);
  mk(sh,M.steel,0,.0,-.62,e);mk(sh,M.steel,0,.62,-.62,e);for(let b=0;b<4;b++)mk(new THREE.BoxGeometry(.012,.62,.02),M.black,.122,.31,-.6-b*.018,e),mk(new THREE.BoxGeometry(.012,.62,.02),M.black,-.122,.31,-.6-b*.018,e);
  mk(new THREE.CylinderGeometry(.03,.03,.25,12),M.steel,.2,.45,-.62,e)}
 // mast, swashplate, hub
-mk(new THREE.CylinderGeometry(.055,.068,1.62,32),M.chrome,0,2.32,0);
-const swash=new THREE.Group();swash.position.set(0,2.42,0);model.add(swash);mk(new THREE.CylinderGeometry(.16,.16,.035,40),M.steel,0,0,0,swash);mk(new THREE.CylinderGeometry(.14,.15,.03,40),M.chrome,0,.035,0,swash);
+mk(new THREE.CylinderGeometry(.055,.068,1.62,64),M.chrome,0,2.32,0);
+const swash=new THREE.Group();swash.position.set(0,2.42,0);model.add(swash);mk(new THREE.CylinderGeometry(.16,.16,.035,72),M.steel,0,0,0,swash);mk(new THREE.CylinderGeometry(.14,.15,.03,72),M.chrome,0,.035,0,swash);
 for(let i=0;i<3;i++){const a=i*2.09;mk(new THREE.CylinderGeometry(.008,.008,.35,8),M.steel,Math.cos(a)*.13,2.24,Math.sin(a)*.13)}
 const rTilt=new THREE.Group();rTilt.position.set(0,3.12,0);model.add(rTilt);const rSpin=new THREE.Group();rTilt.add(rSpin);
 mk(new RB(.2,.13,.16,3,.025),M.steel,0,0,0,rSpin);mk(new THREE.CylinderGeometry(.04,.04,.9,20).rotateZ(PI/2),M.chrome,0,0,0,rSpin);
@@ -191,26 +255,26 @@ function bladeGeo(r0,r1,c,tk,ns,nc,tip,tw){const P=[],Cl=[],I=[],naca=x=>5*tk*(.
  const c0=P.length/3;P.push(r0,0,0,r1,0,0);Cl.push(.2,.2,.2,.2,.2,.2);
  for(let j=0;j<nc;j++){const j1=(j+1)%nc;I.push(c0,j,j1,c0+1,ns*nc+j1,ns*nc+j)}
  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(P,3));g.setAttribute('color',new THREE.Float32BufferAttribute(Cl,3));g.setIndex(I);g.computeVertexNormals();return g}
-const bg1=bladeGeo(.42,5.03,.254,.12,90,48,true,-.14),blades=[];
+const bg1=bladeGeo(.42,5.03,.254,.12,180,80,true,-.14),blades=[];
 for(let k=0;k<2;k++){const az=new THREE.Group();az.rotation.y=k*PI;rSpin.add(az);const cone=new THREE.Group();az.add(cone);const pit=new THREE.Group();cone.add(pit);
  mk(bg1,M.blade,0,0,0,pit);mk(new RB(.32,.05,.16,2,.015),M.steel,.5,0,0,pit);mk(new THREE.BoxGeometry(.08,.015,.12),M.steel,.25,-.03,-.08,pit);blades.push({cone,pit})}
-const blur=new THREE.Mesh(new THREE.CircleGeometry(5.03,96).rotateX(-PI/2),new THREE.MeshBasicMaterial({map:blurTex,transparent:true,opacity:0,depthWrite:false,side:THREE.DoubleSide}));rTilt.add(blur);
+const blur=new THREE.Mesh(new THREE.CircleGeometry(5.03,160).rotateX(-PI/2),new THREE.MeshBasicMaterial({map:blurTex,transparent:true,opacity:0,depthWrite:false,side:THREE.DoubleSide}));rTilt.add(blur);
 // tail: fins, stabiliser, gearbox, tail rotor
-const ext=(pts,d)=>{const s=new THREE.Shape(pts.map(p=>new THREE.Vector2(...p)));const g=new THREE.ExtrudeGeometry(s,{depth:d,bevelEnabled:true,bevelThickness:.01,bevelSize:.01,bevelSegments:4,curveSegments:8});g.translate(0,0,-d/2);g.rotateY(-PI/2);return g};
+const ext=(pts,d)=>{const s=new THREE.Shape(pts.map(p=>new THREE.Vector2(...p)));const g=new THREE.ExtrudeGeometry(s,{depth:d,bevelEnabled:true,bevelThickness:.01,bevelSize:.01,bevelSegments:10,curveSegments:24});g.translate(0,0,-d/2);g.rotateY(-PI/2);return g};
 mk(ext([[0,.04],[.42,0],[.66,.84],[.44,.88]],.03),M.paint,0,1.6,5.9);mk(ext([[.06,-.02],[.42,-.02],[.52,-.66],[.32,-.7]],.03),M.paint,0,1.6,5.9);
 {const naca=x=>.6*(.2969*Math.sqrt(x)-.126*x-.3516*x*x+.2843*x**3-.1036*x**4),pts=[];for(let i=0;i<=24;i++){const x=1-i/24;pts.push([x*.34,naca(x)*.34])}for(let i=1;i<24;i++){const x=i/24;pts.push([x*.34,-naca(x)*.34])}
  mk(ext(pts,1.25),M.paint,0,1.48,5.55)}
-mk(new THREE.SphereGeometry(.1,24,16).scale(1,1,1.4),M.paint,-.03,1.64,6.38);mk(new THREE.CylinderGeometry(.025,.025,.22,12).rotateZ(PI/2),M.steel,-.14,1.70,6.38);
-mk(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new V(0,.95,6.05),new V(0,.82,6.3),new V(0,.9,6.62)]),20,.02,8),M.steel);
+mk(new THREE.SphereGeometry(.1,48,32).scale(1,1,1.4),M.paint,-.03,1.64,6.38);mk(new THREE.CylinderGeometry(.025,.025,.22,12).rotateZ(PI/2),M.steel,-.14,1.70,6.38);
+mk(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new V(0,.95,6.05),new V(0,.82,6.3),new V(0,.9,6.62)]),48,.02,14),M.steel);
 const trHub=new THREE.Group();trHub.position.set(-.26,1.70,6.38);model.add(trHub);const trSpin=new THREE.Group();trHub.add(trSpin);
-{const tg=bladeGeo(.07,.735,.1,.12,24,24,true,-.1);for(const s of[1,-1]){const b=mk(tg,M.blade,0,0,0,trSpin);b.rotation.z=s*PI/2}mk(new THREE.CylinderGeometry(.05,.05,.07,20).rotateZ(PI/2),M.steel,0,0,0,trSpin)}
+{const tg=bladeGeo(.07,.735,.1,.12,48,40,true,-.1);for(const s of[1,-1]){const b=mk(tg,M.blade,0,0,0,trSpin);b.rotation.z=s*PI/2}mk(new THREE.CylinderGeometry(.05,.05,.07,20).rotateZ(PI/2),M.steel,0,0,0,trSpin)}
 // skids
-for(const x of[-1.1,1.1]){mk(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new V(x,.3,-2.0),new V(x,.14,-1.86),new V(x,.055,-1.6),new V(x,.05,-1),new V(x,.05,.4),new V(x,.05,1.2),new V(x,.08,1.33)]),120,.042,16),M.steel);
+for(const x of[-1.1,1.1]){mk(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new V(x,.3,-2.0),new V(x,.14,-1.86),new V(x,.055,-1.6),new V(x,.05,-1),new V(x,.05,.4),new V(x,.05,1.2),new V(x,.08,1.33)]),260,.042,32),M.steel);
  mk(new THREE.BoxGeometry(.04,.015,2.3),M.dark,x,.01,-.2)}
-for(const z of[-1.05,.55]){mk(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([[-1.1,.05],[-1.08,.3],[-.95,.55],[-.55,.62],[0,.63],[.55,.62],[.95,.55],[1.08,.3],[1.1,.05]].map(p=>new V(p[0],p[1],z))),80,.04,14),M.steel)}
+for(const z of[-1.05,.55]){mk(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([[-1.1,.05],[-1.08,.3],[-.95,.55],[-.55,.62],[0,.63],[.55,.62],[.95,.55],[1.08,.3],[1.1,.05]].map(p=>new V(p[0],p[1],z))),180,.04,28),M.steel)}
 for(const x of[-.78,.78])mk(new THREE.BoxGeometry(.32,.025,.16),M.dark,x,.6,-1.05);
 // lights
-const lt=(c,x,y,z)=>{const m=new THREE.Mesh(new THREE.SphereGeometry(.035,12,8),new THREE.MeshBasicMaterial({color:c}));m.position.set(x,y,z);model.add(m);return m};
+const lt=(c,x,y,z)=>{const m=new THREE.Mesh(new THREE.SphereGeometry(.02,16,12),new THREE.MeshBasicMaterial({color:c}));m.position.set(x,y,z);model.add(m);return m};
 const navL=[lt(0xff2020,-.66,1.2,-.9),lt(0x20ff40,.66,1.2,-.9),lt(0xffffff,0,1.62,6.55)],strobeL=lt(0xff1010,0,2.52,6.4);
 const ldg=new THREE.SpotLight(0xfff4e0,0,250,.35,.5,1.2);ldg.position.set(0,.75,-2.2);ldg.target.position.set(0,-2,-12);model.add(ldg,ldg.target);
 mk(new THREE.CylinderGeometry(.006,.006,.6,6),M.black,0,2.05,.7).rotation.x=-.6;
@@ -416,7 +480,7 @@ function drawPed(){const c=pdx;c.fillStyle='#1d1f22';c.fillRect(0,0,420,560);con
 const SW={};for(const[id,x]of SWX){const p=new THREE.Group();p.position.set(x,-.145,0);panel.add(p);mk(new THREE.CylinderGeometry(.009,.009,.008,20).rotateX(PI/2),M.chrome,0,0,.004,p);
  const lev=new THREE.Group();lev.position.z=.008;p.add(lev);mk(new THREE.CylinderGeometry(.003,.0035,.024,10).rotateX(PI/2).translate(0,0,.012),M.chrome,0,0,0,lev);mk(new THREE.SphereGeometry(.0045,12,8),M.chrome,0,0,.024,lev);SW[id]=lev;
  if(id==='clutch'){mk(new THREE.BoxGeometry(.004,.03,.03),M.red,-.014,0,.015,p);mk(new THREE.BoxGeometry(.004,.03,.03),M.red,.014,0,.015,p)}hit(id,new THREE.BoxGeometry(.045,.05,.04),0,0,.02,p)}
-GA.forEach(g=>{mk(new THREE.TorusGeometry(g.r+.002,.0045,12,64),M.black,g.x,g.y,.004,panel);const gl=mk(new THREE.CircleGeometry(g.r,48),new THREE.MeshPhysicalMaterial({transparent:true,opacity:.08,roughness:.02,clearcoat:1,depthWrite:false}),g.x,g.y,.007,panel);gl.castShadow=false;hit(g.id,new THREE.CircleGeometry(g.r,24),g.x,g.y,.009,panel)});
+GA.forEach(g=>{mk(new THREE.TorusGeometry(g.r+.002,.0045,16,96),M.black,g.x,g.y,.004,panel);const gl=mk(new THREE.CircleGeometry(g.r,48),new THREE.MeshPhysicalMaterial({transparent:true,opacity:.08,roughness:.02,clearcoat:1,depthWrite:false}),g.x,g.y,.007,panel);gl.castShadow=false;hit(g.id,new THREE.CircleGeometry(g.r,24),g.x,g.y,.009,panel)});
 hit('ann',new THREE.PlaneGeometry(.77,.036),0,.18,.006,panel);
 const keyG=new THREE.Group();keyG.position.set(.27,-.14,.005);panel.add(keyG);mk(new THREE.CylinderGeometry(.017,.019,.012,28).rotateX(PI/2),M.chrome,0,0,0,keyG);const keyB=new THREE.Group();keyG.add(keyB);
 mk(new RB(.012,.034,.008,2,.003),M.chrome,0,.004,.012,keyB);hit('key',new THREE.BoxGeometry(.06,.06,.04),0,0,.01,keyG);
@@ -446,7 +510,7 @@ function lessonTick(t){const st=LES[L.k],i=L.done.indexOf(false);hits.forEach(h=
  if(st[i][2]()){L.done[i]=true;renderSteps();return}const id=st[i][0];hits.forEach(h=>{if(h.userData.id===id)h.material.opacity=.16+.14*Math.sin(t*6)})}
 
 /* ---------- input ---------- */
-const FWD={y:.12,p:-.22},keys={};let camMode=0,look={...FWD},orb={a:.6,e:.3,d:16},drag=null,mouse={x:0,y:0},fov=68,hover=null,lockFail=false;
+const FWD={y:.1,p:-.13},keys={};let camMode=0,look={...FWD},orb={a:.6,e:.3,d:16},drag=null,mouse={x:0,y:0},fov=68,hover=null,lockFail=false;
 const isAlt=()=>keys.AltLeft||keys.AltRight;
 addEventListener('keydown',e=>{if(e.altKey||e.key==='Alt'||e.code==='Tab')e.preventDefault();keys[e.code]=true;if(e.repeat)return;const k=e.code;
  if(k==='KeyC')camMode=(camMode+1)%3;if(k==='KeyV')camMode=camMode?0:1;if(k==='KeyZ'){look={...FWD};fov=68}if(k==='KeyP')paused=!paused;if(k==='Backspace'){e.preventDefault();reset()}
@@ -495,12 +559,53 @@ $('les').onchange=e=>setLesson(e.target.value);$('qs').onclick=()=>{quick();setL
 $('wind').onchange=e=>windSpd=+e.target.value;
 
 /* ---------- pilot's manual ---------- */
+const SVGS=`<defs><marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0L10,5L0,10z" fill="#8fd3ff"/></marker></defs><style>.b{fill:#152030;stroke:#8fd3ff;stroke-width:1.5}.t{fill:#e8eef5;font:600 13px Arial}.s{fill:#9fb0c4;font:11px Arial}.l{stroke:#8fd3ff;stroke-width:2;fill:none;marker-end:url(#ar)}.y{fill:#ffd166;font:600 12px Arial}</style>`;
+const sbx=(x,y,w,h,t,s)=>`<rect class="b" x="${x}" y="${y}" width="${w}" height="${h}" rx="7"/><text class="t" x="${x+w/2}" y="${y+h/2-(s?3:-4)}" text-anchor="middle">${t}</text>${s?`<text class="s" x="${x+w/2}" y="${y+h/2+13}" text-anchor="middle">${s}</text>`:''}`;
+const ln=(d)=>`<path class="l" d="${d}"/>`,svg=(vb,body)=>`<svg viewBox="${vb}" style="width:100%;height:auto;background:#0e1520;border-radius:6px">${SVGS}${body}</svg>`;
+const SVG={
+ drive:svg('0 0 760 250',sbx(20,165,160,56,'Engine','Lycoming O-540 · 2718 rpm')+sbx(215,165,140,56,'Lower sheave','pulley on crankshaft')+sbx(215,30,140,56,'Upper sheave','+ clutch actuator')+
+  sbx(395,30,150,56,'Sprag clutch','one-way: rotor may overrun')+sbx(585,30,155,56,'Main gearbox','90° bevel gears')+sbx(585,165,155,56,'Tail gearbox','via shaft in tail boom')+
+  ln('M180,193H213')+ln('M285,165V88')+'<text class="y" x="292" y="132">V-belts</text>'+ln('M355,58H393')+ln('M545,58H583')+ln('M662,30V8')+'<text class="y" x="672" y="18">Main rotor 408 rpm</text>'+ln('M662,86V163')+'<text class="s" x="668" y="130">drive shaft</text>'+ln('M585,212H520')+'<text class="y" x="380" y="216">Tail rotor ~2426 rpm</text>'),
+ engine:svg('0 0 760 340',`<rect x="300" y="60" width="160" height="190" rx="14" fill="#2a3038" stroke="#8a96a6"/><text class="t" x="380" y="150" text-anchor="middle">Crankcase</text><text class="s" x="380" y="166" text-anchor="middle">crankshaft inside</text>`+
+  [0,1,2].map(i=>{const y=72+i*58;let f='';for(let k=0;k<9;k++)f+=`<line x1="${200+k*10}" y1="${y}" x2="${200+k*10}" y2="${y+44}" stroke="#8a96a6"/><line x1="${470+k*10}" y1="${y+8}" x2="${470+k*10}" y2="${y+52}" stroke="#8a96a6"/>`;
+   return `<rect x="190" y="${y}" width="110" height="44" rx="6" fill="#3b434d"/><rect x="460" y="${y+8}" width="110" height="44" rx="6" fill="#3b434d"/>${f}<rect x="150" y="${y+6}" width="42" height="32" rx="5" fill="#59626e"/><rect x="568" y="${y+14}" width="42" height="32" rx="5" fill="#59626e"/><text class="s" x="140" y="${y+27}" text-anchor="end">cyl ${2*i+2}</text><text class="s" x="620" y="${y+35}">cyl ${2*i+1}</text>`}).join('')+
+  sbx(318,8,124,40,'Cooling fan','front, toward cabin')+sbx(318,262,58,32,'Mag L','')+sbx(384,262,58,32,'Mag R','')+sbx(20,8,130,40,'Starter','electric, front')+sbx(610,8,130,40,'Alternator','belt-driven')+
+  '<text class="y" x="452" y="283">← rear of engine</text><text class="s" x="20" y="330">Carburetor + oil sump sit underneath the crankcase.</text><text class="s" x="20" y="314">Each cylinder: piston, 2 valves, 2 spark plugs (one per magneto).</text>'),
+ gov:svg('0 0 760 230',sbx(20,20,150,56,'Collective','pilot raises it')+sbx(300,20,160,56,'Correlator','mechanical linkage')+sbx(590,20,150,56,'Throttle valve','air into engine')+sbx(590,150,150,56,'Engine + rotor','RPM changes')+sbx(300,150,160,56,'Governor','compares with 102 %')+
+  ln('M170,48H298')+ln('M460,48H588')+ln('M665,76V148')+ln('M590,178H462')+'<text class="s" x="472" y="170">RPM sensor</text>'+ln('M380,150V110Q380,96 420,90L588,66')+'<text class="y" x="438" y="118">motor nudges throttle</text>'+'<text class="s" x="20" y="120">1. Collective up → more blade pitch → more drag</text><text class="s" x="20" y="138">2. Correlator opens the throttle roughly</text><text class="s" x="20" y="156">3. Governor trims the rest → RPM stays 101–102 %</text>'),
+ carb:svg('0 0 760 260',`<path d="M60,40 C220,40 260,105 330,105 L430,105 C500,105 540,40 700,40 L700,220 C540,220 500,155 430,155 L330,155 C260,155 220,220 60,220 Z" fill="#1d2733" stroke="#8a96a6"/>`+
+  ln('M70,130H180')+'<text class="s" x="70" y="122">outside air +15 °C</text>'+'<line x1="560" y1="95" x2="600" y2="165" stroke="#e8eef5" stroke-width="5"/><text class="s" x="575" y="190">throttle plate</text>'+
+  '<rect x="372" y="155" width="10" height="60" fill="#59626e"/><text class="s" x="390" y="205">fuel nozzle</text>'+[[555,92],[600,168],[440,108],[470,152],[350,108]].map(([x,y])=>`<circle cx="${x}" cy="${y}" r="8" fill="#bfe6ff" opacity=".85"/>`).join('')+
+  '<text class="y" x="330" y="96">venturi −5 °C: ice forms</text>'+ln('M640,130H745')+'<text class="s" x="640" y="122">to cylinders</text>'+ln('M150,250L150,200')+'<text class="s" x="160" y="245">carb heat: hot air from the exhaust shroud melts the ice</text>')};
+const GUIDE={
+ tach:'Two needles on one scale in % of normal RPM. <b>White = engine, yellow = rotor.</b> When the clutch is engaged and the engine drives the rotor, they sit exactly on top of each other. Keep them in the narrow green band at <b>101–102 %</b> with power on. If they split with the rotor needle higher, the engine is no longer driving (sprag clutch freewheeling, as in an autorotation). The wider green arc (90–108 %) is the rotor range allowed in autorotation.',
+ asi:'Your speed through the air in <b>knots</b> (1 kt ≈ 1.85 km/h). It works on air pressure from the pitot tube, so it needs no electricity. Clockwise from 0. Typical numbers: 60 kt climb, 90–110 kt cruise. <b>Red line 130 kt</b> is the never-exceed speed. Below about 20 kt, or when moving sideways, it reads nonsense.',
+ ai:'The <b>artificial horizon</b>. The orange symbol is your helicopter; blue is sky, brown is ground. If the line tilts, you are banked: the marks around the top show 10°, 20°, 30° and 60° of bank. If the horizon sits below the orange symbol, the nose is up. Each ladder line is 5° of pitch. Hovering, it should be almost level.',
+ alt:'Height above sea level in feet, read like a clock. The <b>long needle counts hundreds</b> (one turn = 1,000 ft) and the <b>short needle counts thousands</b>. Example: short needle just past 1, long needle on 5 → 1,500 ft. The airfield here is at sea level, so it also shows your height above the pad.',
+ map:'<b>Manifold pressure</b> in inches of mercury: the main <b>engine power gauge</b>. With the engine stopped it shows the outside air pressure (about 29.9 in). At idle the throttle is nearly closed and it drops low (about 12–15 in). The more power you pull with the collective, the higher it goes: about 22–24 in in a hover. Stay out of the red (above about 26 in) or you overload the transmission.',
+ vsi:'<b>Vertical speed</b> in thousands of feet per minute. The needle points left (9 o\'clock) when level. Up from there means climbing, down means descending. Example: needle at "5" above zero = climbing 500 ft/min. It lags a second or two behind reality. In a hover keep it near zero; descending faster than ~300 ft/min with little airspeed risks vortex ring state.',
+ dg:'The <b>directional gyro</b> (heading). Read the number under the orange line at the top: N = north, 3 = 030°, E = 090°, S = 180°, W = 270°. The card turns when you yaw with the pedals. The airfield runway runs east–west.',
+ clk:'A digital box showing <b>outside air temperature</b>, the time, and the <b>electrical voltage</b>. About 14 V means the alternator is charging; about 12 V means you are running on the battery alone.',
+ oilt:'<b>Oil temperature</b> in °F. It starts cold (around 60 °F) and slowly rises into the green as the engine warms. Normal in flight is about 180–220 °F. If it reaches the red line (245 °F) the oil is too hot to protect the engine.',
+ oilp:'<b>Oil pressure</b> in psi. After start it must come up into the green within about 30 seconds, or you shut down immediately. Normal is 60–90 psi. Below 25 psi the red OIL warning light comes on.',
+ cht:'<b>Cylinder head temperature</b> in °F, measured on the hottest cylinder. It rises with power and with slow, hard climbs (less cooling air). Red line 500 °F.',
+ cat:'<b>Carburetor air temperature</b> in °C. If the needle is in the <b>yellow arc (−15 to +5 °C)</b>, ice can form in the carburetor and choke the engine. Pull carb heat until the needle is to the right of the yellow arc.',
+ fuelm:'<b>Main fuel tank</b>: E = empty, ½, F = full (about 30 gallons). The LOW FUEL light comes on with about 3 gallons left, roughly 10 minutes of flying. Land.',
+ fuela:'<b>Auxiliary fuel tank</b> (about 17 gallons). It drains into the main tank by gravity, so it empties first.',
+ amm:'<b>Ammeter</b>: current into (+) or out of (−) the battery. Right of zero = charging, which is normal right after start, then it settles near zero. Left of zero with the engine running = the alternator is off or has failed, and the battery is draining.',
+ hobbs:'<b>Hobbs meter</b>: counts engine running hours (to tenths of an hour). Used for maintenance intervals and for renting the aircraft. It does not affect flying.'};
 const MAN=`<button id="mx">Close (M)</button><h2>R44 Pilot's Manual — how the systems work</h2>
 <p>A simplified engineering guide to the Robinson R44 as modelled in this trainer. It is for learning only, not a replacement for the real Pilot's Operating Handbook.</p>
 <h3>1 · The drive train: from engine to rotor</h3>
 <p>The <b>Lycoming O-540</b> six-cylinder piston engine lies flat behind the cabin. Its power travels like this:</p>
 <p><b>Engine → lower pulley (sheave) → V-belts → upper sheave → sprag (one-way) clutch → main gearbox → main rotor</b>, with a long drive shaft through the tail boom to the <b>tail rotor</b> gearbox. Engine and rotor are geared together, which is why the tachometer shows both as a percentage: at 100 % the engine turns about 2,718 rpm and the main rotor about 408 rpm.</p>
 <p>The <b>clutch actuator</b> is an electric motor that pushes the two sheaves apart and tensions the belts. With the belts slack (DISENGAGED) the engine runs without turning the rotor, so it is easy to start. The <b>sprag clutch</b> lets the rotor spin faster than the engine but never slower: if the engine quits, the rotor freewheels and you can autorotate.</p>
+<figure>${SVG.drive}<figcaption>Power path from the engine to both rotors.</figcaption></figure>
+<div class="pics"><figure><img id="ph0" alt="Engine bay, right side"><figcaption>Engine bay, right side: finned cylinders, gold exhaust pipes, the black cooling-fan scroll at the front, and the drive belts rising to the upper sheave under the mast.</figcaption></figure>
+<figure><img id="ph1" alt="Engine from below and behind"><figcaption>Engine from below and behind: the three left-bank cylinders, exhausts and tail-cone attachment.</figcaption></figure></div>
+<figure>${SVG.engine}<figcaption>Lycoming O-540 seen from above: six horizontally opposed cylinders (three per side) around one crankshaft.</figcaption></figure>
+<div class="pics"><figure><img id="ph2" alt="Main rotor head and swashplate"><figcaption>Main rotor head: chrome mast, the two-part swashplate (lower part tilted by the cyclic, upper part spins), pitch links and the teetering hub.</figcaption></figure>
+<figure><img id="ph3" alt="Tail rotor"><figcaption>Tail rotor and tail gearbox on the left side of the boom end, with the stabilisers and the tail guard.</figcaption></figure></div>
 <h3>2 · Why rotor RPM must stay almost constant</h3>
 <p>An aeroplane changes lift by changing speed. A helicopter's rotor runs at a <b>fixed speed</b> and you change lift by changing the <b>pitch (angle) of the blades</b> with the collective. Rotor RPM has a narrow safe band:</p>
 <p>• <b>Too low</b> (below ~97 %, LOW RPM horn): lift falls with the square of RPM, the blades must fly at a higher angle to compensate, and below about 80 % they can stall. A stalled rotor cannot be recovered. Robinson rotors are light, so RPM decays fast: about 1–2 s of reaction time.<br>
@@ -510,6 +615,7 @@ const MAN=`<button id="mx">Close (M)</button><h2>R44 Pilot's Manual — how the 
 <p><b>The problem:</b> raising the collective increases blade pitch → more lift but also more drag → the rotor needs more power → if throttle stays the same, RPM drops. Lowering the collective does the opposite and RPM rises.</p>
 <p><b>The correlator</b> is a mechanical linkage from the collective to the throttle: raising the collective automatically opens the throttle part of the way. It is a coarse, approximate match.</p>
 <p><b>The governor</b> is a small electronic controller. It reads engine RPM and, through a motor on the throttle linkage, keeps twisting the throttle grip to hold <b>101–102 %</b>. It corrects whatever the correlator gets wrong: wind, temperature, altitude, how fast you move the collective. You can feel it turn the grip in your hand and you can overpower it.</p>
+<figure>${SVG.gov}<figcaption>Two helpers move the same throttle: the correlator (a coarse mechanical link) and the governor (a fine electronic correction).</figcaption></figure>
 <div class="ex">Example: you are hovering at 102 %. You raise the collective to climb → drag rises → RPM starts to sag to 100 % → the correlator has already opened the throttle a little, and the governor senses the remaining drop and opens it further → RPM returns to 102 %. You never touched the throttle.</div>
 <p><b>Why the governor only works above ~80 %:</b> during start, warm-up and shutdown you deliberately want low RPM. A governor active then would fight you and race the engine to 102 % before the oil is warm or the belts are tensioned. So you set those RPMs by hand, then switch the governor on and roll the throttle open past 80 % where it takes over.</p>
 <p><b>Why 50–60 % for warm-up and clutch engagement:</b></p>
@@ -521,6 +627,7 @@ const MAN=`<button id="mx">Close (M)</button><h2>R44 Pilot's Manual — how the 
 <h3>5 · Fuel, mixture and carburetor ice</h3>
 <p>Fuel flows from the main and aux tanks through the <b>fuel shut-off valve</b> to the carburetor. The <b>mixture</b> control sets the fuel-to-air ratio: full RICH for all ground and flight operations here, and pulled to <b>idle cut-off</b> to starve and stop the engine. That is the normal way to shut it down, because it leaves no fuel in the cylinders.</p>
 <p><b>Carburetor ice:</b> air speeding through the carburetor venturi, plus evaporating fuel, can drop its temperature by 20 °C or more. Moisture freezes on the throttle valve and chokes the engine: RPM sags and the governor opens the throttle further to hide it. Keep the <b>CAT gauge out of the yellow arc</b> (−15 to +5 °C) by pulling <b>carb heat</b>, which feeds warm air from around the exhaust.</p>
+<figure>${SVG.carb}<figcaption>Inside the carburetor: the air speeds up and cools in the narrow venturi, and ice forms on the throttle plate.</figcaption></figure>
 <h3>6 · Electrical system</h3>
 <p>The <b>battery</b> powers the starter, the clutch actuator, the governor, the electronic tachometers, the engine gauges and the warning lights. The engine-driven <b>alternator</b> recharges it and carries the load once the engine is above ~50 %. The ALT light shows it is not charging, and the ammeter shows charge (+) or discharge (−). <b>Avionics</b> stay off during start, because the starter motor causes voltage spikes.</p>
 <h3>7 · Flight controls</h3>
@@ -533,9 +640,23 @@ const MAN=`<button id="mx">Close (M)</button><h2>R44 Pilot's Manual — how the 
 <b>Ground effect:</b> near the ground (less than one rotor diameter) the cushion of air needs less power, so hovering at 3 ft is easier than at 50 ft.<br>
 <b>Translational lift:</b> above about 15–20 kt the rotor flies into undisturbed air and gains efficiency: the helicopter suddenly climbs or needs less power.<br>
 <b>Dynamic rollover:</b> a skid pinned to the ground while the helicopter rolls about it. Beyond about 30° it cannot be stopped, so lift off smoothly and level.</p>
-<h3>9 · Every switch, control and gauge</h3><dl id="mref"></dl>`;
+<h3>9 · Reading the round instruments</h3>
+<p>Each picture is taken from your cockpit panel right now, so the needles show live values. Turn the battery on to see the electric gauges come alive.</p>
+<figure><img id="ph4" alt="Instrument panel"><figcaption>The panel from the pilot's seat. Top strip: warning lights. Left block: flight and power instruments. Right block: engine gauges. Bottom: switches and ignition key.</figcaption></figure>
+<div id="gguide"></div>
+<h3>10 · Every switch, control and gauge</h3><dl id="mref"></dl>`;
+// renders a "photo" of part of the 3D model (positions in model coordinates)
+function shoot(pos,tgt,fv=40,w=640,h=380){const cam=new THREE.PerspectiveCamera(fv,w/h,.02,3000);heli.updateMatrixWorld(true);
+ cam.position.copy(model.localToWorld(new V(...pos)));cam.lookAt(model.localToWorld(new V(...tgt)));
+ renderer.setSize(w,h,false);renderer.render(scene,cam);const url=renderer.domElement.toDataURL('image/jpeg',.9);renderer.setSize(innerWidth,innerHeight);return url}
+function gaugePic(g){drawPanel();const[X,Y]=P2(g.x,g.y),R=g.r*PS*1.15,c=document.createElement('canvas');c.width=c.height=180;
+ c.getContext('2d').drawImage(pc,X-R,Y-R,2*R,2*R,0,0,180,180);return c.toDataURL()}
 function toggleMan(){const m=$('man');if(m.hidden){if(!m.innerHTML){m.innerHTML=MAN;$('mx').onclick=toggleMan;
- $('mref').innerHTML=Object.values(CTRL).map(c=>`<dt>${c.n}</dt><dd>${c.d}</dd>`).join('')}document.exitPointerLock&&document.exitPointerLock()}m.hidden=!m.hidden}
+ $('mref').innerHTML=Object.values(CTRL).map(c=>`<dt>${c.n}</dt><dd>${c.d}</dd>`).join('')}
+ const shots=[[[1.55,1.05,.95],[0,.95,.62],38],[[-1.2,.55,1.75],[0,.98,.62],42],[[.95,3.05,-.85],[0,2.65,0],40],[[-1.7,1.85,5.7],[-.22,1.68,6.35],40],[[.33,1.67,-.5],[0,1.15,-1.42],55]];
+ shots.forEach((s,i)=>$('ph'+i).src=shoot(...s));
+ $('gguide').innerHTML=GA.map(g=>`<div class="gg"><img src="${gaugePic(g)}" alt="${g.n}"><div><b>${g.n}</b><br>${GUIDE[g.id]||g.d}</div></div>`).join('');
+ document.exitPointerLock&&document.exitPointerLock()}m.hidden=!m.hidden}
 $('mb').onclick=toggleMan;
 
 /* ---------- audio ---------- */
@@ -606,10 +727,10 @@ function frame(now){requestAnimationFrame(frame);const dt=Math.min(.05,(now-last
  const el=S.elec;navL.forEach(l=>l.visible=el&&S.nav);strobeL.visible=el&&S.strobe&&(t*1.2%1)<.08;ldg.intensity=el&&S.ldg?400:0;
  // camera
  camera.fov+=(fov*(camMode?1:1)-camera.fov)*.2;camera.updateProjectionMatrix();
- if(camMode===0){camera.position.copy(new V(.33,.38,-.55).applyQuaternion(F.q).add(F.p));camera.quaternion.copy(F.q).multiply(new THREE.Quaternion().setFromEuler(tmpE.set(look.p,look.y,0,'YXZ')))}
- else{tmpE.setFromQuaternion(F.q,'YXZ');const yaw=camMode===1?tmpE.y+(look.y-FWD.y)*1.5:orb.a,e=camMode===1?.18:orb.e,dd=camMode===1?15:orb.d;
+ if(camMode===0){camera.position.copy(new V(.33,.5,-.55).applyQuaternion(F.q).add(F.p));camera.quaternion.copy(F.q).multiply(new THREE.Quaternion().setFromEuler(tmpE.set(look.p,look.y,0,'YXZ')))}
+ else{tmpE.setFromQuaternion(F.q,'YXZ');const yaw=camMode===1?tmpE.y+(look.y-FWD.y)*1.5:orb.a,e=camMode===1?.3:orb.e,dd=camMode===1?17:orb.d;
   const tp=new V(Math.sin(yaw)*Math.cos(e)*dd,Math.sin(e)*dd+1,Math.cos(yaw)*Math.cos(e)*dd).add(F.p);tp.y=Math.max(tp.y,groundH(tp.x,tp.z)+.5);
-  camera.position.lerp(tp,camMode===1?.08:1);camera.lookAt(F.p.x,F.p.y+.5,F.p.z)}
+  camera.position.lerp(tp,camMode===1?.08:1);if(camMode===1){const fw=new V(0,0,-1).applyQuaternion(F.q);fw.y=0;fw.normalize();camera.lookAt(F.p.x+fw.x*9,F.p.y+1,F.p.z+fw.z*9)}else camera.lookAt(F.p.x,F.p.y+.5,F.p.z)}
  sun.position.copy(F.p).addScaledVector(sunDir,150);sun.target.position.copy(F.p);
  const ws=wind.length();sockArm.rotation.set(-PI/2*(1-sstep(0,7,ws))*0.85,Math.atan2(wind.x,wind.z),0);
  if(t-pt>.033){pt=t;drawPanel();lessonTick(t);updAudio();
