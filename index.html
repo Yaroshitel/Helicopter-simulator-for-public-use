@@ -52,7 +52,7 @@ Throttle twist (R44) / correction grip (Mi-8) <kbd>T</kbd> open / <kbd>G</kbd> c
 <div id="steps" style="margin-top:6px"></div>
 <div class="row"><button id="qs">Quick start</button><button id="rs">Reset</button></div>
 <div class="row"><button id="mb">📖 Pilot's manual (M)</button></div>
-<label><input type="checkbox" id="sas" checked> Training stability assist (rate damping)</label>
+<label title="Limited-authority attitude hold that works through the rotor controls, like a HeliSAS (R44) or the AP-34 autopilot (Mi-8). Off = bare airframe."><input type="checkbox" id="sas"> SAS / attitude hold (limited authority)</label>
 <label>Mouse sensitivity <input type="range" id="sens" min="0.3" max="3" step="0.1" value="1" style="width:110px"></label>
 <label>Time of day <input type="range" id="tod" min="0" max="24" step="0.05" value="15.5" style="width:110px"> <span id="todv"></span></label>
 <label>Day/night cycle <select id="cyc"><option value="0">Paused</option><option value="1" selected>1 day = 24 min</option><option value="6">1 day = 4 min</option><option value="60">1 day = 24 s (demo)</option></select></label>
@@ -459,20 +459,20 @@ mk(new THREE.PlaneGeometry(.3,.4),new THREE.MeshStandardMaterial({map:pdTex,emis
 
 /* ---------- state ---------- */
 // per-aircraft physics. R44: 1 t, 2-blade teetering rotor turning CCW. Mi-8: 10.5 t, 5-blade articulated rotor turning CW.
-const PHY=MI8?{Om0:21.16,R:10.645,SIG:.078,CD0:.0095,MASS:10500,Ix:60000,Iy:55000,Iz:20000,IR:26000,HUB:[0,2.55,0],TRP:[-.42,2.7,10.62],TAIL:[0,.9,9.6],
-  TH0:.017,THR:.245,ST:[.7,.85],DIR:-1,TRK:16000,TRB:.3,TRG:.7,TRC:600,TRA:12,TRP0:40000,FD:[40,60,4],FIN:14,STB:12,DMP:[21000,21000,9000],SAS:[90000,80000,30000],
+const PHY=MI8?{Om0:21.16,R:10.645,SIG:.078,CD0:.0095,MASS:10500,Ix:85000,Iy:80000,Iz:24000,IR:26000,HUB:[0,2.55,0],TRP:[-.42,2.7,10.62],TAIL:[0,.9,9.6],
+  TH0:.017,THR:.245,ST:[.7,.85],DIR:-1,TRK:16000,TRB:.3,TRG:.7,TRC:600,TRA:12,TRP0:40000,FD:[40,60,4],FIN:14,STB:12,DMP:[3000,5000,1500],SAS:{wn:[1,1.1,.8],A:[.2,.2,.15]},
   KH:150000,b1r:.046,kc:[1.2e6,1e5,4e5,4e4],y0:1.87,agl0:1.9,vyLim:-4,cyc:[.12,.10],pick:3.2,lag:.12,
   cpts:[[0,-1.9,-3.6,'n'],[2.25,-1.9,.65,'w'],[-2.25,-1.9,.65,'w'],[0,-.95,10.35,'t']]}
- :{Om0:42.7,R:5.03,SIG:.032,CD0:.0095,MASS:1000,Ix:1900,Iy:2300,Iz:800,IR:550,HUB:[0,1.97,0],TRP:[-.26,.55,6.38],TAIL:[0,.45,6.0],
-  TH0:.012,THR:.22,ST:[.6,.8],DIR:1,TRK:1500,TRB:.12,TRG:.88,TRC:45,TRA:1.7,TRP0:2500,FD:[5.5,6,1.1],FIN:1.6,STB:1.5,DMP:[700,700,400],SAS:[3500,3200,2500],
+ :{Om0:42.7,R:5.03,SIG:.032,CD0:.0095,MASS:1100,Ix:2600,Iy:2500,Iz:750,IR:550,HUB:[0,1.97,0],TRP:[-.26,.55,6.38],TAIL:[0,.45,6.0],
+  TH0:.012,THR:.22,ST:[.6,.8],DIR:1,TRK:1500,TRB:.12,TRG:.88,TRC:45,TRA:1.7,TRP0:2500,FD:[5.5,6,1.1],FIN:1.6,STB:1.5,DMP:[100,200,60],SAS:{wn:[1.3,1.6,0],A:[.2,.2,0]},
   KH:0,b1r:0,kc:[8e4,8e3,3e4,3e3],y0:1.13,agl0:1.12,vyLim:-3.6,cyc:[.17,.13],pick:2.5,lag:.07,
   cpts:[[1.1,-1.1,-1.4],[-1.1,-1.1,-1.4],[1.1,-1.1,1.15],[-1.1,-1.1,1.15],[0,-.33,6.62,'t']]};
 const {Om0,R,SIG,CD0,MASS,Ix,Iy,Iz,IR,DIR}=PHY,AR=PI*R*R,CLA=5.7,QMAX=4500,IE=20;
 const HUB=new V(...PHY.HUB),TRP=new V(...PHY.TRP),TAIL=new V(...PHY.TAIL);
-const F={p:new V(),v:new V(),q:new THREE.Quaternion(),w:new V(),Om:0,We:0,li:.03,a1:0,b1:0,T:0,vrs:0,crashed:false};
+const F={p:new V(),v:new V(),q:new THREE.Quaternion(),w:new V(),Om:0,We:0,li:.03,lam:.03,a1:0,b1:0,T:0,vrs:0,crashed:false,sas:{p:0,r:0,y:0,x:0,z:0,d:0,sc:0,sp:0,pc:[0,0,0]}};
 const S={},C={cx:0,cy:0,tx:0,ty:0,coll:0,ped:0};let wind=new V(),windSpd=4,paused=false,ht=0;
 const CPTS=PHY.cpts.map(a=>({r:new V(a[0],a[1],a[2]),t:a[3],anc:null}));
-function reset(){F.p.set(0,PHY.y0,0);F.v.set(0,0,0);F.q.set(0,0,0,1);F.w.set(0,0,0);Object.assign(F,{Om:0,We:0,li:.03,a1:0,b1:0,crashed:false});
+function reset(){F.p.set(0,PHY.y0,0);F.v.set(0,0,0);F.q.set(0,0,0,1);F.w.set(0,0,0);Object.assign(F,{Om:0,We:0,li:.03,a1:0,b1:0,crashed:false});Object.assign(F.sas,{x:0,z:0,d:0,sc:1,sp:1});
  Object.assign(S,{batt:false,alt:false,avion:false,gov:false,strobe:false,nav:false,ldg:false,clutch:false,clutchE:0,key:0,mix:false,carb:0,fuelV:false,rbrake:true,
   twist:0,running:false,fuelM:24,fuelA:14,oilT:59,oilP:0,cht:59,ice:0,batQ:1,gi:0,thr:0,frac:0,carbT:15,amps:0,starter:false,cm:false,elec:false,low:false,hb:1});
  if(MI8)Object.assign(S,{eng:[0,1].map(()=>({ng:0,running:false,start:false,st:0,egt:15,oil:0,p:0})),apu:{n:0,on:false,start:false,egt:15,air:0},cond:[0,0],fcock:[false,false],
@@ -485,20 +485,47 @@ function quick(){reset();
  F.Om=F.We=1.02*Om0;C.ped=-.15;drawPed()}
 function crash(t){if(F.crashed)return;F.crashed=true;const m=$('msg');m.innerHTML='💥 '+t+'<br><small style="font-size:15px">Backspace to reset</small>';m.style.display='block'}
 
+// SAS: a limited-authority attitude hold that moves the controls through series actuators (it adds a little cyclic / pedal on top of
+// the pilot's input; it never applies forces of its own). It holds the attitude you leave it at: while you move the stick it follows,
+// and it re-captures half a second after you stop and the aircraft has steadied (a held manoeuvre stays yours). Authority is ±20 % of travel and the actuators are rate-limited, so it
+// smooths out gusts and drift but a real upset is still yours to fly. The R44 version has pitch and roll only (HeliSAS); the
+// Mi-8 AP-34 adds a heading channel on the pedals.
+const SASG=(()=>{const W=MASS*9.81,P=PHY.SAS,mp=(W*HUB.y+PHY.KH)*PHY.cyc[0],mr=(W*HUB.y+PHY.KH)*PHY.cyc[1],my=PHY.TRK*PHY.TRG*TRP.z;
+ return {p:[P.wn[0]**2*Ix/mp,1.2*P.wn[0]*Ix/mp],r:[P.wn[1]**2*Iz/mr,1.2*P.wn[1]*Iz/mr],y:[P.wn[2]**2*Iy/my,1.4*P.wn[2]*Iy/my],A:P.A}})();
+const sasE=new THREE.Euler(),wrapA=a=>Math.atan2(Math.sin(a),Math.cos(a));
+function sasStep(dt,hb,r){const A=F.sas,G=SASG;sasE.setFromQuaternion(F.q,'YXZ');const p=sasE.x,rl=sasE.z,y=sasE.y;
+ const on=S.sas&&r>.9&&!F.touch&&S.elec!==false,pc=A.pc,mv=Math.abs(C.cx-pc[0])+Math.abs(C.cy-pc[1]),mp=Math.abs(C.ped-pc[2]);pc[0]=C.cx;pc[1]=C.cy;pc[2]=C.ped;
+ const ra=Math.hypot(F.w.x,F.w.z)<.05,ry=Math.abs(F.w.y)<.05;   // capture only once the stick is still AND the aircraft has settled
+ A.sc=on&&mv<.12*dt&&(ra||A.sc<=0)?A.sc-dt:.5;A.sp=on&&mp<.05*dt&&(ry||A.sp<=0)?A.sp-dt:.5;
+ if(A.sc>0){A.p=p;A.r=rl}if(A.sp>0)A.y=y;
+ const sl=(c,t)=>c+clamp(t-c,-.8*dt,.8*dt),hold=x=>A.sc>0?0:x;
+ const ty=on?clamp(G.p[0]*hold(p-A.p)+G.p[1]*F.w.x,-G.A[0],G.A[0]):0,tx=on?clamp(G.r[0]*hold(rl-A.r)+G.r[1]*F.w.z,-G.A[1],G.A[1]):0,
+  tz=on&&G.A[2]?clamp(G.y[0]*(A.sp>0?0:wrapA(y-A.y))+G.y[1]*F.w.y,-G.A[2],G.A[2]):0;
+ A.d=sl(A.d,ty);A.x=sl(A.x,tx);A.z=sl(A.z,tz);return {y:A.d,x:A.x,z:A.z}}
+
 /* ---------- physics ---------- */
 function step(dt){
  const q=F.q,qi=q.clone().invert(),rho=1.225*Math.exp(-Math.max(0,F.p.y)/9000),dr=rho/1.225,h5=.5*rho,hb=S.hb;
- const vb=F.v.clone().sub(wind).applyQuaternion(qi),Om=F.Om,r=Om/Om0,OR=Math.max(Om*R,5),u=-vb.z,mu=Math.hypot(vb.x,vb.z)/OR,kl=Om>5?2/Om:0;
- const tA=C.cy*hb*PHY.cyc[0]-clamp(u/OR,-.5,.5)*.25+kl*F.w.x,tB=C.cx*hb*PHY.cyc[1]+PHY.b1r-clamp(vb.x/OR,-.5,.5)*.25+kl*F.w.z,k=Math.min(1,dt/(PHY.lag/(hb<1?.5:1)));
+ const vb=F.v.clone().sub(wind).applyQuaternion(qi),Om=F.Om,r=Om/Om0,OR=Math.max(Om*R,5),u=-vb.z,mu=Math.hypot(vb.x,vb.z)/OR;
+ // rotor disk response to body rates (hover flapping theory): on-axis lag 16/(γΩ) gives the rotor's own damping; the gyroscopic 1/Ω term
+ // couples pitch and roll (a pitch rate tilts the disk sideways and vice versa; the sense flips with the direction of rotation)
+ const kl=Om>5?PHY.lag*Om0/Om:0,kc=Om>5?DIR/Om:0,th=PHY.TH0+C.coll*PHY.THR;
+ // flap-back with forward/sideward speed grows with blade pitch: a1 ≈ 2μ(4/3·θ − λ), so more collective in cruise pitches the nose up
+ const fb=clamp(2*(4/3*th-F.lam),.06,.45),sv=sasStep(dt,hb,r);
+ const tA=(C.cy+sv.y)*hb*PHY.cyc[0]-clamp(u/OR,-.5,.5)*fb+kl*F.w.x+kc*F.w.z,tB=(C.cx+sv.x)*hb*PHY.cyc[1]+PHY.b1r-clamp(vb.x/OR,-.5,.5)*fb+kl*F.w.z-kc*F.w.x,k=Math.min(1,dt/(PHY.lag/(hb<1?.5:1)));
  F.a1+=(tA-F.a1)*k;F.b1+=(tB-F.b1)*k;
- const n=new V(Math.sin(F.b1),Math.cos(F.a1)*Math.cos(F.b1),-Math.sin(F.a1)),lc=vb.dot(n)/OR,th=PHY.TH0+C.coll*PHY.THR;
- let li=F.li,CT=0;for(let i=0;i<3;i++){const lam=lc+li;CT=SIG*CLA/2*(th*(1/3+mu*mu/2)-lam/2);li+=(Math.max(CT,0)/(2*Math.max(Math.hypot(mu,lam),.015))-li)*.5}F.li=li;
+ const n=new V(Math.sin(F.b1),Math.cos(F.a1)*Math.cos(F.b1),-Math.sin(F.a1)),lc=vb.dot(n)/OR;
+ // momentum inflow with a 1.15 induced-power factor, and dynamic inflow: the wake takes ~0.1–0.2 s to build up, so the thrust overshoots
+ // briefly on a collective pull and sags on a dump instead of following the lever instantly
+ const KAP=1.15,CTf=lam=>SIG*CLA/2*(th*(1/3+mu*mu/2)-lam/2);let le=F.li;
+ for(let i=0;i<6;i++){const lam=lc+le;le+=(KAP*Math.max(CTf(lam),0)/(2*Math.max(Math.hypot(mu,lam),.015))-le)*.5}
+ F.li+=(le-F.li)*Math.min(1,dt*4*Math.max(Om,1)*Math.max(Math.hypot(mu,lc+F.li),.02)/.85);const li=F.li,CT=CTf(lc+li);F.lam=lc+li;
  const lh=Math.sqrt(Math.max(CT,1e-4)/2),dsc=-lc/lh;F.vrs=r>.5&&mu<.08?Math.max(0,1-Math.abs(dsc-.95)/.6)*(1-mu/.08):0;
  const hw=HUB.clone().applyQuaternion(q).add(F.p),hA=hw.y-groundH(hw.x,hw.z);let ge=1;
  if(hA<R*1.5){ge=Math.min(1.35,1/(1-Math.pow(R/(4*Math.max(hA,R*.3)),2)));ge=1+(ge-1)*Math.max(0,1-mu/.12)}
  const T=CT*(1-.4*F.vrs)*ge*sstep(PHY.ST[0],PHY.ST[1],r)*rho*AR*Om*Om*R*R;
- const Qr=(CT*(lc+li)+SIG*CD0/8*(1+4.6*mu*mu))*rho*AR*Om*Om*R*R*R;
- const tvx=vb.x+F.w.y*TRP.z-F.w.z*TRP.y,Ttr=(PHY.TRK*DIR*(PHY.TRB-PHY.TRG*DIR*C.ped)-PHY.TRC*tvx)*r*r*dr;
+ const Qr=(Math.max(CT,0)*(lc+li)+SIG*CD0/8*(1+4.6*mu*mu))*rho*AR*Om*Om*R*R*R;
+ const tvx=vb.x+F.w.y*TRP.z-F.w.z*TRP.y,Ttr=(PHY.TRK*DIR*(PHY.TRB-PHY.TRG*DIR*(C.ped+sv.z))-PHY.TRC*tvx)*r*r*dr;
  const Qtr=Om>1?(Math.abs(Ttr)*Math.sqrt(Math.abs(Ttr)/(2*rho*PHY.TRA))/.75+PHY.TRP0*r*r*r)/Om:0;
  // engine & drive
  let Qd=0;
@@ -528,7 +555,7 @@ function step(dt){
  f.x-=h5*PHY.FD[0]*vb.x*Math.abs(vb.x);f.y-=h5*PHY.FD[1]*vb.y*Math.abs(vb.y);f.z-=h5*PHY.FD[2]*vb.z*Math.abs(vb.z);
  m.add(new V().crossVectors(TRP,new V(Ttr,0,0)));m.y-=DIR*Qd;m.x-=PHY.KH*F.a1*r*r;m.z-=PHY.KH*F.b1*r*r;   // torque reaction + articulated-hub moment
  const vt=new V().crossVectors(F.w,TAIL).add(vb),sp=Math.abs(u)+2,fin=new V(-h5*PHY.FIN*sp*vt.x,-h5*PHY.STB*sp*vt.y,0);f.add(fin);m.add(new V().crossVectors(TAIL,fin));
- const sas=S.sas?1:0,D=PHY.DMP,SA=PHY.SAS;m.x-=F.w.x*(D[0]+SA[0]*sas);m.y-=F.w.y*(D[1]+SA[1]*sas);m.z-=F.w.z*(D[2]+SA[2]*sas);
+ const D=PHY.DMP;m.x-=F.w.x*D[0];m.y-=F.w.y*D[1];m.z-=F.w.z*D[2];   // small fuselage damping only — the rest comes from the rotor and tail surfaces
  // ground contact: skids/tail use a static-friction anchor; wheels roll (nose wheel castors, mains brake with the parking brake)
  const Fw=f.applyQuaternion(q),[K0,K1,K2,K3]=PHY.kc;let touch=false;
  for(const c of CPTS){const pw=c.r.clone().applyQuaternion(q).add(F.p),pen=groundH(pw.x,pw.z)-pw.y;if(pen<=0){c.anc=null;continue}touch=true;
