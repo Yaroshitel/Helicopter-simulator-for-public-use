@@ -2,7 +2,7 @@
 <html lang="en">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta charset="utf-8">
-<title>R44 Trainer</title>
+<title>Helicopter Training Simulator</title>
 <style>
 html,body{margin:0;height:100%;overflow:hidden;background:#000;font-family:system-ui,Segoe UI,sans-serif;color:#e8eef5}
 canvas{display:block}
@@ -22,18 +22,22 @@ canvas{display:block}
 #tip b{color:#ffd166;font-size:13.5px}#tip i{color:#8fd3ff;font-style:normal;display:block;margin-top:4px}
 #msg{position:fixed;left:50%;top:38%;transform:translate(-50%,-50%);font-size:26px;font-weight:700;text-shadow:0 2px 8px #000;display:none;text-align:center}
 #start{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;background:rgba(0,0,0,.65);z-index:9;cursor:pointer;font-size:15px;text-align:center}
-#start h1{margin:0 0 8px;color:#ffd166}
+#start h1{margin:0 0 14px;color:#ffd166}
+.pick{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin:0 16px 16px}.pick button{background:#152030;color:#e8eef5;border:2px solid #3a4a5c;border-radius:12px;padding:14px 22px;font-size:17px;font-weight:700;cursor:pointer;min-width:220px}
+.pick button small{display:block;font-weight:400;font-size:12.5px;color:#9fb0c4;margin-top:4px}.pick button.on,.pick button:hover{border-color:#ffd166}
 kbd{background:#223;border:1px solid #445;border-radius:3px;padding:0 4px;font-size:11px}
 </style>
 <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
-<div id="start"><h1>R44 Training Simulator</h1><div>Click to take the controls (enables sound)<br><small>Mouse = cyclic · W/S collective · A/D pedals · hold <b>Alt</b> to look around and use switches — aim at any switch or gauge to learn what it does.</small></div></div>
+<div id="start"><h1>Helicopter Training Simulator</h1>
+<div class="pick"><button data-a="r44">Robinson R44<small>light · piston engine · 1 t · 2 blades</small></button><button data-a="mi8">Mil Mi-8<small>heavy · twin turbine · 10.5 t · 5 blades</small></button></div>
+<div>Choose a helicopter to take the controls (enables sound)<br><small>Mouse = cyclic · W/S collective · A/D pedals · hold <b>Alt</b> to look around and use switches — aim at any switch or gauge to learn what it does.</small></div></div>
 <div id="help" class="box"><b style="color:#ffd166">Controls</b> <small>(H hides panels)</small><br>
 Click the view to take the controls (<kbd>Esc</kbd> releases the mouse)<br>
 Mouse left/right = roll · forward/back = pitch (cyclic) · <kbd>Space</kbd> centre cyclic<br>
 <b>Hold <kbd>Alt</kbd></b> = free look: the cyclic stays put, aim the centre dot at a switch and click (right-click = turn back, hold on key BOTH = START)<br>
 Collective <kbd>W</kbd> up / <kbd>S</kbd> down<br>
 Yaw pedals <kbd>A</kbd> left / <kbd>D</kbd> right · <kbd>X</kbd> centre<br>
-Throttle twist <kbd>T</kbd> open / <kbd>G</kbd> close<br>
+Throttle twist (R44) / correction grip (Mi-8) <kbd>T</kbd> open / <kbd>G</kbd> close<br>
 <kbd>V</kbd> 1st ⇄ 3rd person · <kbd>C</kbd> cycle cockpit/chase/orbit · wheel zoom · <kbd>Z</kbd> reset view<br>
 Pause <kbd>P</kbd> · Reset <kbd>Backspace</kbd> · <b>Manual <kbd>M</kbd></b> · Gamepad supported</div>
 <div id="mode" class="box" style="left:50%;top:12px;transform:translateX(-50%);font-weight:600"></div>
@@ -43,7 +47,7 @@ Pause <kbd>P</kbd> · Reset <kbd>Backspace</kbd> · <b>Manual <kbd>M</kbd></b> �
 #man button{float:right;background:#1b2533;color:#e8eef5;border:1px solid #3a4a5c;border-radius:6px;padding:4px 10px;cursor:pointer}</style>
 <div id="xh" hidden style="position:fixed;left:50%;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border:2px solid #ffd166;border-radius:50%;box-shadow:0 0 0 1px #000;pointer-events:none;z-index:4"></div>
 <div id="stick" class="box" style="right:12px;bottom:12px;width:90px;height:90px;padding:0"><div style="position:absolute;left:50%;top:0;bottom:0;border-left:1px solid #445"></div><div style="position:absolute;top:50%;left:0;right:0;border-top:1px solid #445"></div><div id="sdot" style="position:absolute;width:10px;height:10px;border-radius:5px;background:#ffd166;margin:-5px 0 0 -5px"></div><div style="position:absolute;left:4px;top:2px;font-size:10px;color:#889">CYCLIC</div></div>
-<div id="panel" class="box"><h3>Lesson</h3>
+<div id="panel" class="box"><label style="margin:0 0 8px">Aircraft <select id="air"><option value="r44">Robinson R44</option><option value="mi8">Mil Mi-8</option></select></label><h3>Lesson</h3>
 <select id="les"><option value="start">1 · Cold start → first hover</option><option value="shut">2 · Shutdown</option><option value="free">3 · Free flight</option></select>
 <div id="steps" style="margin-top:6px"></div>
 <div class="row"><button id="qs">Quick start</button><button id="rs">Reset</button></div>
@@ -59,6 +63,7 @@ import {Sky} from 'three/addons/objects/Sky.js';
 import {RoundedBoxGeometry as RB} from 'three/addons/geometries/RoundedBoxGeometry.js';
 const V=THREE.Vector3,PI=Math.PI,$=id=>document.getElementById(id);
 const clamp=(x,a,b)=>x<a?a:x>b?b:x,sstep=(a,b,x)=>{x=clamp((x-a)/(b-a),0,1);return x*x*(3-2*x)};
+const MI8=location.hash==='#mi8',AIR=MI8?'mi8':'r44';   // aircraft is chosen on the start screen; switching reloads the page
 
 /* ---------- renderer / scene ---------- */
 const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
@@ -310,35 +315,51 @@ const pdc=document.createElement('canvas');pdc.width=420;pdc.height=560;const pd
 mk(new THREE.PlaneGeometry(.3,.4),new THREE.MeshStandardMaterial({map:pdTex,emissiveMap:pdTex,emissive:0xffffff,emissiveIntensity:.3,roughness:.8}),0,0,.001,ped);mk(new THREE.BoxGeometry(.32,.42,.3),M.dark,0,0,-.15,ped);
 
 /* ---------- state ---------- */
-const Om0=42.7,R=5.03,AR=PI*R*R,SIG=.032,CLA=5.7,CD0=.0095,MASS=1000,Ix=1900,Iy=2300,Iz=800,QMAX=4500,IE=20,IR=550;
-const HUB=new V(0,1.97,0),TRP=new V(-.26,.55,6.38),TAIL=new V(0,.45,6.0);
+// per-aircraft physics. R44: 1 t, 2-blade teetering rotor turning CCW. Mi-8: 10.5 t, 5-blade articulated rotor turning CW.
+const PHY=MI8?{Om0:21.16,R:10.645,SIG:.078,CD0:.0095,MASS:10500,Ix:60000,Iy:55000,Iz:20000,IR:26000,HUB:[0,2.55,0],TRP:[-.42,2.7,10.62],TAIL:[0,.9,9.6],
+  TH0:.017,THR:.245,ST:[.7,.85],DIR:-1,TRK:16000,TRB:.3,TRG:.7,TRC:600,TRA:12,TRP0:40000,FD:[40,60,4],FIN:14,STB:12,DMP:[21000,21000,9000],SAS:[90000,80000,30000],
+  KH:150000,b1r:.046,kc:[1.2e6,1e5,4e5,4e4],y0:1.87,agl0:1.9,vyLim:-4,cyc:[.12,.10],pick:3.2,lag:.12,
+  cpts:[[0,-1.9,-3.6,'n'],[2.25,-1.9,.65,'w'],[-2.25,-1.9,.65,'w'],[0,-.95,10.35,'t']]}
+ :{Om0:42.7,R:5.03,SIG:.032,CD0:.0095,MASS:1000,Ix:1900,Iy:2300,Iz:800,IR:550,HUB:[0,1.97,0],TRP:[-.26,.55,6.38],TAIL:[0,.45,6.0],
+  TH0:.012,THR:.22,ST:[.6,.8],DIR:1,TRK:1500,TRB:.12,TRG:.88,TRC:45,TRA:1.7,TRP0:2500,FD:[5.5,6,1.1],FIN:1.6,STB:1.5,DMP:[700,700,400],SAS:[3500,3200,2500],
+  KH:0,b1r:0,kc:[8e4,8e3,3e4,3e3],y0:1.13,agl0:1.12,vyLim:-3.6,cyc:[.17,.13],pick:2.5,lag:.07,
+  cpts:[[1.1,-1.1,-1.4],[-1.1,-1.1,-1.4],[1.1,-1.1,1.15],[-1.1,-1.1,1.15],[0,-.33,6.62,'t']]};
+const {Om0,R,SIG,CD0,MASS,Ix,Iy,Iz,IR,DIR}=PHY,AR=PI*R*R,CLA=5.7,QMAX=4500,IE=20;
+const HUB=new V(...PHY.HUB),TRP=new V(...PHY.TRP),TAIL=new V(...PHY.TAIL);
 const F={p:new V(),v:new V(),q:new THREE.Quaternion(),w:new V(),Om:0,We:0,li:.03,a1:0,b1:0,T:0,vrs:0,crashed:false};
 const S={},C={cx:0,cy:0,tx:0,ty:0,coll:0,ped:0};let wind=new V(),windSpd=4,paused=false,ht=0;
-const CPTS=[[1.1,-1.1,-1.4],[-1.1,-1.1,-1.4],[1.1,-1.1,1.15],[-1.1,-1.1,1.15],[0,-.33,6.62]].map(a=>({r:new V(...a),anc:null}));
-function reset(){F.p.set(0,1.13,0);F.v.set(0,0,0);F.q.set(0,0,0,1);F.w.set(0,0,0);Object.assign(F,{Om:0,We:0,li:.03,a1:0,b1:0,crashed:false});
+const CPTS=PHY.cpts.map(a=>({r:new V(a[0],a[1],a[2]),t:a[3],anc:null}));
+function reset(){F.p.set(0,PHY.y0,0);F.v.set(0,0,0);F.q.set(0,0,0,1);F.w.set(0,0,0);Object.assign(F,{Om:0,We:0,li:.03,a1:0,b1:0,crashed:false});
  Object.assign(S,{batt:false,alt:false,avion:false,gov:false,strobe:false,nav:false,ldg:false,clutch:false,clutchE:0,key:0,mix:false,carb:0,fuelV:false,rbrake:true,
-  twist:0,running:false,fuelM:24,fuelA:14,oilT:59,oilP:0,cht:59,ice:0,batQ:1,gi:0,thr:0,frac:0,carbT:15,amps:0,starter:false,cm:false,elec:false,low:false});
- Object.assign(C,{cx:0,cy:0,tx:0,ty:0,coll:0,ped:0});CPTS.forEach(c=>c.anc=null);$('msg').style.display='none';setLesson($('les').value);drawPed()}
-function quick(){reset();Object.assign(S,{batt:true,alt:true,avion:true,gov:true,strobe:true,nav:true,clutch:true,clutchE:1,key:3,mix:true,fuelV:true,rbrake:false,twist:.25,running:true,oilT:180,oilP:80,cht:330});
+  twist:0,running:false,fuelM:24,fuelA:14,oilT:59,oilP:0,cht:59,ice:0,batQ:1,gi:0,thr:0,frac:0,carbT:15,amps:0,starter:false,cm:false,elec:false,low:false,hb:1});
+ if(MI8)Object.assign(S,{eng:[0,1].map(()=>({ng:0,running:false,start:false,st:0,egt:15,oil:0,p:0})),apu:{n:0,on:false,start:false,egt:15,air:0},cond:[0,0],fcock:[false,false],
+  svc:false,pL:false,pR:false,genL:false,genR:false,hyd:false,sel:0,pbrake:true,beacon:false,fuel:1800,hydP:0,hydB:0,mgbP:0,mgbT:15,volts:0,apuReq:false});
+ Object.assign(C,{cx:0,cy:0,tx:0,ty:0,coll:0,ped:0});CPTS.forEach(c=>c.anc=null);$('msg').style.display='none';setLesson($('les').value);if(!MI8)drawPed()}
+function quick(){reset();
+ if(MI8){Object.assign(S,{batt:true,genL:true,genR:true,hyd:true,nav:true,beacon:true,svc:true,pL:true,pR:true,fcock:[true,true],cond:[2,2],rbrake:false,pbrake:false,twist:1,gi:.25});
+  S.eng.forEach(E=>Object.assign(E,{ng:80,running:true,egt:650,oil:3.5}));F.Om=.95*Om0;C.ped=.2;return}
+ Object.assign(S,{batt:true,alt:true,avion:true,gov:true,strobe:true,nav:true,clutch:true,clutchE:1,key:3,mix:true,fuelV:true,rbrake:false,twist:.25,running:true,oilT:180,oilP:80,cht:330});
  F.Om=F.We=1.02*Om0;C.ped=-.15;drawPed()}
 function crash(t){if(F.crashed)return;F.crashed=true;const m=$('msg');m.innerHTML='💥 '+t+'<br><small style="font-size:15px">Backspace to reset</small>';m.style.display='block'}
 
 /* ---------- physics ---------- */
 function step(dt){
- const q=F.q,qi=q.clone().invert(),rho=1.225*Math.exp(-Math.max(0,F.p.y)/9000),dr=rho/1.225,h5=.5*rho;
+ const q=F.q,qi=q.clone().invert(),rho=1.225*Math.exp(-Math.max(0,F.p.y)/9000),dr=rho/1.225,h5=.5*rho,hb=S.hb;
  const vb=F.v.clone().sub(wind).applyQuaternion(qi),Om=F.Om,r=Om/Om0,OR=Math.max(Om*R,5),u=-vb.z,mu=Math.hypot(vb.x,vb.z)/OR,kl=Om>5?2/Om:0;
- const tA=C.cy*.17-clamp(u/OR,-.5,.5)*.25+kl*F.w.x,tB=C.cx*.13-clamp(vb.x/OR,-.5,.5)*.25+kl*F.w.z,k=Math.min(1,dt/.07);
+ const tA=C.cy*hb*PHY.cyc[0]-clamp(u/OR,-.5,.5)*.25+kl*F.w.x,tB=C.cx*hb*PHY.cyc[1]+PHY.b1r-clamp(vb.x/OR,-.5,.5)*.25+kl*F.w.z,k=Math.min(1,dt/(PHY.lag/(hb<1?.5:1)));
  F.a1+=(tA-F.a1)*k;F.b1+=(tB-F.b1)*k;
- const n=new V(Math.sin(F.b1),Math.cos(F.a1)*Math.cos(F.b1),-Math.sin(F.a1)),lc=vb.dot(n)/OR,th=.012+C.coll*.22;
+ const n=new V(Math.sin(F.b1),Math.cos(F.a1)*Math.cos(F.b1),-Math.sin(F.a1)),lc=vb.dot(n)/OR,th=PHY.TH0+C.coll*PHY.THR;
  let li=F.li,CT=0;for(let i=0;i<3;i++){const lam=lc+li;CT=SIG*CLA/2*(th*(1/3+mu*mu/2)-lam/2);li+=(Math.max(CT,0)/(2*Math.max(Math.hypot(mu,lam),.015))-li)*.5}F.li=li;
- const dsc=-lc/.033;F.vrs=r>.5&&mu<.08?Math.max(0,1-Math.abs(dsc-.95)/.6)*(1-mu/.08):0;
+ const lh=Math.sqrt(Math.max(CT,1e-4)/2),dsc=-lc/lh;F.vrs=r>.5&&mu<.08?Math.max(0,1-Math.abs(dsc-.95)/.6)*(1-mu/.08):0;
  const hw=HUB.clone().applyQuaternion(q).add(F.p),hA=hw.y-groundH(hw.x,hw.z);let ge=1;
- if(hA<R*1.5){ge=Math.min(1.35,1/(1-Math.pow(R/(4*Math.max(hA,1.5)),2)));ge=1+(ge-1)*Math.max(0,1-mu/.12)}
- const T=CT*(1-.4*F.vrs)*ge*sstep(.6,.8,r)*rho*AR*Om*Om*R*R;
+ if(hA<R*1.5){ge=Math.min(1.35,1/(1-Math.pow(R/(4*Math.max(hA,R*.3)),2)));ge=1+(ge-1)*Math.max(0,1-mu/.12)}
+ const T=CT*(1-.4*F.vrs)*ge*sstep(PHY.ST[0],PHY.ST[1],r)*rho*AR*Om*Om*R*R;
  const Qr=(CT*(lc+li)+SIG*CD0/8*(1+4.6*mu*mu))*rho*AR*Om*Om*R*R*R;
- const tvx=vb.x+F.w.y*TRP.z-F.w.z*TRP.y,Ttr=(1500*(.12-.88*C.ped)-45*tvx)*r*r*dr;
- const Qtr=Om>1?(Math.abs(Ttr)*Math.sqrt(Math.abs(Ttr)/(2*rho*1.7))/.75+2500*r*r*r)/Om:0;
+ const tvx=vb.x+F.w.y*TRP.z-F.w.z*TRP.y,Ttr=(PHY.TRK*DIR*(PHY.TRB-PHY.TRG*DIR*C.ped)-PHY.TRC*tvx)*r*r*dr;
+ const Qtr=Om>1?(Math.abs(Ttr)*Math.sqrt(Math.abs(Ttr)/(2*rho*PHY.TRA))/.75+PHY.TRP0*r*r*r)/Om:0;
  // engine & drive
+ let Qd=0;
+ if(MI8)Qd=mi8Drive(dt,Qr+Qtr,r);else{
  const re=F.We/Om0,mags=S.key===0?0:S.key>=3?1:.96;S.elec=S.batt&&S.batQ>.03;
  let thr=S.twist+.4*C.coll;const gv=S.gov&&S.elec&&re>.8&&re<1.2;
  if(gv){const e=1.02-re;S.gi=clamp(S.gi+e*2*dt,-1,1);thr+=S.gi+e*10}else S.gi*=1-dt;S.thr=thr=clamp(thr,0,1);
@@ -351,7 +372,6 @@ function step(dt){
  S.frac=S.running?Math.max(0,(.03+.97*Math.pow(thr,1.5))*mags*(1-S.ice)*(1-.07*S.carb)*Math.min(1,dr*1.02)-.05*re)*clamp(re*2.5,0,1):0;
  const Qn=QMAX*S.frac+Qs-(F.We>.01?30+320*re*re+(S.running?0:220):0),Ql=Qr+Qtr+(Om>.01?30+(S.rbrake?1200:0):0);
  const tgt=S.clutch?1:0;S.cm=false;if(S.elec&&S.clutchE!==tgt){S.clutchE=clamp(S.clutchE+Math.sign(tgt-S.clutchE)*dt/9,0,1);S.cm=true}
- let Qd=0;
  if(S.clutchE>=1&&F.We>=F.Om-.3&&F.We<=F.Om+.6){const aE=Qn/IE,aR=-Ql/IR,aC=(Qn-Ql)/(IE+IR);if(aR>aE){F.We+=aE*dt;F.Om+=aR*dt}else{F.Om+=aC*dt;F.We=F.Om;Qd=Ql+IR*aC}}
  else{const e=S.clutchE;Qd=clamp(e*e*3000*(F.We-F.Om),0,Math.min(e*e*1500,Math.max(0,Qn*.9+(F.We-.35*Om0)*60)));F.We+=(Qn-Qd)/IE*dt;F.Om+=(Qd-Ql)/IR*dt}
  F.We=Math.max(0,F.We);F.Om=Math.max(0,F.Om);
@@ -359,27 +379,30 @@ function step(dt){
  if(S.running){S.fuelM=Math.max(0,S.fuelM-(2.5+16*S.frac*re)/3600*dt);if(S.fuelA>0&&S.fuelM<29){const t=Math.min(S.fuelA,dt*.004);S.fuelA-=t;S.fuelM+=t}}
  S.oilP=ap(S.oilP,S.running?clamp(18+75*re,0,92):0,1.5);S.oilT=ap(S.oilT,S.running?110+90*re*(.5+.5*S.frac):59,.012);S.cht=ap(S.cht,S.running?220+260*S.frac*re+40*re:59,.05);
  const chg=S.alt&&S.running&&re>.5&&S.batt,load=(S.elec?2+(S.avion?6:0)+(S.ldg?8:0)+(S.nav?3:0)+(S.strobe?2:0)+(S.cm?10:0):0)+(S.starter?150:0);
- S.amps=chg?Math.min(60,(1-S.batQ)*300+3):-load;S.batQ=clamp(S.batQ+(chg?(1-S.batQ)*.01:-load*1.5e-5)*dt,0,1);
+ S.amps=chg?Math.min(60,(1-S.batQ)*300+3):-load;S.batQ=clamp(S.batQ+(chg?(1-S.batQ)*.01:-load*1.5e-5)*dt,0,1)}
  // forces (body)
  const f=n.clone().multiplyScalar(T),m=new V().crossVectors(HUB,f);f.x+=Ttr;
- f.x-=h5*5.5*vb.x*Math.abs(vb.x);f.y-=h5*6*vb.y*Math.abs(vb.y);f.z-=h5*1.1*vb.z*Math.abs(vb.z);
- m.add(new V().crossVectors(TRP,new V(Ttr,0,0)));m.y-=Qd;
- const vt=new V().crossVectors(F.w,TAIL).add(vb),sp=Math.abs(u)+2,fin=new V(-h5*1.6*sp*vt.x,-h5*1.5*sp*vt.y,0);f.add(fin);m.add(new V().crossVectors(TAIL,fin));
- const sas=S.sas?1:0;m.x-=F.w.x*(700+3500*sas);m.y-=F.w.y*(700+3200*sas);m.z-=F.w.z*(400+2500*sas);
- // ground contact
- const Fw=f.applyQuaternion(q);let touch=false;
- for(let i=0;i<CPTS.length;i++){const c=CPTS[i],pw=c.r.clone().applyQuaternion(q).add(F.p),pen=groundH(pw.x,pw.z)-pw.y;if(pen<=0){c.anc=null;continue}touch=true;
-  const vp=new V().crossVectors(F.w,c.r).applyQuaternion(q).add(F.v);const fn=Math.max(0,8e4*pen-8e3*vp.y);if(!c.anc)c.anc=pw.clone();
-  let fx=-3e4*(pw.x-c.anc.x)-3e3*vp.x,fz=-3e4*(pw.z-c.anc.z)-3e3*vp.z;const ft=Math.hypot(fx,fz),lim=.55*fn;if(ft>lim){fx*=lim/ft;fz*=lim/ft;c.anc.copy(pw)}
-  const fc=new V(fx,fn,fz);Fw.add(fc);m.add(new V().crossVectors(c.r,fc.clone().applyQuaternion(qi)));
-  if(vp.y<(i<4?-3.6:-2.2))crash(i<4?`Hard landing (${Math.round(-vp.y*197)} ft/min)`:'Tail rotor / stinger strike');
-  if(Math.hypot(vp.x,vp.z)>13)crash('Skids caught the ground at speed — rollover')}
+ f.x-=h5*PHY.FD[0]*vb.x*Math.abs(vb.x);f.y-=h5*PHY.FD[1]*vb.y*Math.abs(vb.y);f.z-=h5*PHY.FD[2]*vb.z*Math.abs(vb.z);
+ m.add(new V().crossVectors(TRP,new V(Ttr,0,0)));m.y-=DIR*Qd;m.x-=PHY.KH*F.a1*r*r;m.z-=PHY.KH*F.b1*r*r;   // torque reaction + articulated-hub moment
+ const vt=new V().crossVectors(F.w,TAIL).add(vb),sp=Math.abs(u)+2,fin=new V(-h5*PHY.FIN*sp*vt.x,-h5*PHY.STB*sp*vt.y,0);f.add(fin);m.add(new V().crossVectors(TAIL,fin));
+ const sas=S.sas?1:0,D=PHY.DMP,SA=PHY.SAS;m.x-=F.w.x*(D[0]+SA[0]*sas);m.y-=F.w.y*(D[1]+SA[1]*sas);m.z-=F.w.z*(D[2]+SA[2]*sas);
+ // ground contact: skids/tail use a static-friction anchor; wheels roll (nose wheel castors, mains brake with the parking brake)
+ const Fw=f.applyQuaternion(q),[K0,K1,K2,K3]=PHY.kc;let touch=false;
+ for(const c of CPTS){const pw=c.r.clone().applyQuaternion(q).add(F.p),pen=groundH(pw.x,pw.z)-pw.y;if(pen<=0){c.anc=null;continue}touch=true;
+  const vp=new V().crossVectors(F.w,c.r).applyQuaternion(q).add(F.v);const fn=Math.max(0,K0*pen-K1*vp.y),lim=.55*fn;let fc;
+  if(c.t==='n'||(c.t==='w'&&!S.pbrake)){c.anc=null;const vpb=vp.clone().applyQuaternion(qi),fl=c.t==='w'?K3*4:K3*.08;
+   fc=new V(clamp(-fl*vpb.x,-lim,lim),0,clamp(-2000*vpb.z,-.03*fn,.03*fn)).applyQuaternion(q);fc.y=fn}
+  else{if(!c.anc)c.anc=pw.clone();let fx=-K2*(pw.x-c.anc.x)-K3*vp.x,fz=-K2*(pw.z-c.anc.z)-K3*vp.z;const ft=Math.hypot(fx,fz);if(ft>lim){fx*=lim/ft;fz*=lim/ft;c.anc.copy(pw)}fc=new V(fx,fn,fz)}
+  Fw.add(fc);m.add(new V().crossVectors(c.r,fc.clone().applyQuaternion(qi)));
+  if(vp.y<(c.t==='t'?-2.2:PHY.vyLim))crash(c.t==='t'?'Tail rotor / tail bumper strike':`Hard landing (${Math.round(-vp.y*197)} ft/min)`);
+  if(!c.t&&Math.hypot(vp.x,vp.z)>13)crash('Skids caught the ground at speed — rollover')}
  if(touch){const e=new THREE.Euler().setFromQuaternion(q,'YXZ');if(Math.abs(e.z)>.55||e.x<-.5||e.x>.6)crash('Dynamic rollover — blades struck the ground')}
- const agl=F.p.y-groundH(F.p.x,F.p.z)-1.12;
- if(agl>2&&T<.15*MASS*9.81&&r>.8&&Math.abs(F.w.z)>.7)crash('Mast bumping (low-G + roll)');
+ const agl=F.p.y-groundH(F.p.x,F.p.z)-PHY.agl0;
+ if(!MI8&&agl>2&&T<.15*MASS*9.81&&r>.8&&Math.abs(F.w.z)>.7)crash('Mast bumping (low-G + roll)');
  Fw.y-=MASS*9.81;F.v.addScaledVector(Fw,dt/MASS);F.p.addScaledVector(F.v,dt);
  F.w.x+=m.x/Ix*dt;F.w.y+=m.y/Iy*dt;F.w.z+=m.z/Iz*dt;F.q.multiply(new THREE.Quaternion(F.w.x*dt/2,F.w.y*dt/2,F.w.z*dt/2,1)).normalize();
- Object.assign(F,{T,Qd,Ttr,mu,agl,touch,th});S.low=S.elec&&r<.97&&C.coll>.03}
+ Object.assign(F,{T,Qd,Ttr,mu,agl,touch,th});
+ S.low=MI8?S.elec&&r<.88&&(S.eng[0].running||S.eng[1].running):S.elec&&r<.97&&C.coll>.03}
 
 /* ---------- controls catalogue ---------- */
 const OO=b=>b?'ON':'OFF';
@@ -423,8 +446,8 @@ const ANN=[['CLUTCH','#ffb000',()=>S.cm],['ALT','#ff3030',()=>!(S.alt&&S.running
  ['LOW RPM','#ff3030',()=>S.low],['STARTER ON','#ffb000',()=>S.starter],['GOV OFF','#ffb000',()=>!S.gov],['ROTOR BRAKE','#ffb000',()=>S.rbrake],['MR CHIP','#ff3030',()=>0],['TR CHIP','#ff3030',()=>0]];
 CTRL.ann={n:'WARNING / CAUTION lights',d:'Red = warning, amber = caution. CLUTCH: actuator moving · ALT: not charging · OIL: low pressure · LOW FUEL · LOW RPM (with horn) · STARTER ON · GOV OFF · ROTOR BRAKE · MR/TR CHIP: metal in a gearbox — land immediately.',g:()=>S.elec?'powered':'no power'};
 GA.forEach(g=>CTRL[g.id]=CTRL[g.id]||{n:g.n,d:g.d});
-const P2=(x,y)=>[CW/2+x*PS,CH/2-y*PS];
-function dial(c,g){const o=g.o,[X,Y]=P2(g.x,g.y),Rr=g.r*PS;c.save();c.translate(X,Y);
+const P2=(x,y)=>[CW/2+x*PS,CH/2-y*PS],RPN={P2,PS,c:px,cv:pc};
+function dial(c,g,pn=RPN){const o=g.o,[X,Y]=pn.P2(g.x,g.y),Rr=g.r*pn.PS;c.save();c.translate(X,Y);
  const gr=c.createRadialGradient(0,-Rr*.3,Rr*.1,0,0,Rr);gr.addColorStop(0,'#1d2023');gr.addColorStop(1,'#050606');c.fillStyle=gr;c.beginPath();c.arc(0,0,Rr,0,7);c.fill();
  if(!o){c.restore();return}const A=v=>o.a0+(v-o.min)/(o.max-o.min)*(o.a1-o.a0);g.A=A;
  for(const[a,b,cl,rr]of o.arcs||[]){c.strokeStyle=cl;c.lineWidth=Rr*.1;c.beginPath();c.arc(0,0,Rr*(rr||.86),A(a),A(b));c.stroke()}
@@ -432,7 +455,7 @@ function dial(c,g){const o=g.o,[X,Y]=P2(g.x,g.y),Rr=g.r*PS;c.save();c.translate(
  c.fillStyle='#f2f2f2';c.textAlign='center';c.textBaseline='middle';c.font=`600 ${Rr*(g.r>.03?.17:.24)}px Arial`;
  for(const v of o.lab){const a=A(v);c.fillText(o.fmt?o.fmt(v):v,Math.cos(a)*Rr*.6,Math.sin(a)*Rr*.6)}
  c.font=`${Rr*(g.r>.03?.11:.16)}px Arial`;c.fillStyle='#bbb';c.fillText(o.t,0,Rr*.3);if(o.t2)c.fillText(o.t2,0,Rr*.45);c.restore()}
-function needle(g,a,len=.82,w=.05,col='#f4f4f4'){const[X,Y]=P2(g.x,g.y),Rr=g.r*PS;px.save();px.translate(X,Y);px.rotate(a);px.fillStyle=col;px.shadowColor='rgba(0,0,0,.6)';px.shadowBlur=4;px.shadowOffsetY=2;
+function needle(g,a,len=.82,w=.05,col='#f4f4f4',pn=RPN){const px=pn.c,[X,Y]=pn.P2(g.x,g.y),Rr=g.r*pn.PS;px.save();px.translate(X,Y);px.rotate(a);px.fillStyle=col;px.shadowColor='rgba(0,0,0,.6)';px.shadowBlur=4;px.shadowOffsetY=2;
  px.beginPath();px.moveTo(-Rr*.18,-Rr*w);px.lineTo(Rr*len,-Rr*w*.3);px.lineTo(Rr*len,Rr*w*.3);px.lineTo(-Rr*.18,Rr*w);px.fill();px.shadowBlur=0;px.fillStyle='#222';px.beginPath();px.arc(0,0,Rr*.09,0,7);px.fill();px.restore()}
 const SWX=[['clutch',-.345],['batt',-.25],['alt',-.19],['avion',-.13],['gov',-.07],['strobe',-.01],['nav',.05],['ldg',.11]];
 {const c=bx,g=c.createLinearGradient(0,0,0,CH);g.addColorStop(0,'#2a2d31');g.addColorStop(1,'#1a1c1f');c.fillStyle=g;c.fillRect(0,0,CW,CH);
@@ -490,9 +513,259 @@ const fuelL=new THREE.Group();fuelL.position.set(-.08,-.165,.01);ped.add(fuelL);
 const rbL=new THREE.Group();rbL.position.set(.08,-.165,.01);ped.add(rbL);mk(new THREE.CylinderGeometry(.006,.006,.04,10).rotateX(PI/2).translate(0,0,.02),M.chrome,0,0,0,rbL);mk(new RB(.05,.012,.012,2,.004),M.red,0,0,.04,rbL);hit('rbrake',new THREE.BoxGeometry(.06,.06,.06),0,0,.02,rbL);
 heli.traverse(o=>{if(o.isMesh&&o.userData.id){o.castShadow=false}});
 
+/* ================= Mil Mi-8MTV ================= */
+// Everything Mi-8 lives here; it is only built when the Mi-8 is chosen (the R44 model is then hidden).
+let M8=null;const G8=[],SW8=[],GUIDE8={},Vv={};let pn8=null,cn8=null,oh8=null;
+const CTRL8={
+ batt:{n:'BATTERIES (overhead)',d:'Connect the two 24 V batteries to the DC bus. They power the APU starter, the engine start system, fuel pumps, warning lights and the electric instruments until the generators come on line. An APU start draws a lot of current, so do not waste battery time.',g:()=>OO(S.batt),a:()=>S.batt=!S.batt},
+ mgenL:{n:'GENERATOR 1',d:'Engine-driven AC generator (rectified to 27 V DC). Switch ON once engine 1 is at ground idle; the GEN 1 OFF light goes out and the voltmeter rises to ~28 V.',g:()=>OO(S.genL),a:()=>S.genL=!S.genL},
+ mgenR:{n:'GENERATOR 2',d:'Same as generator 1, for engine 2. One generator alone can carry the whole electrical load.',g:()=>OO(S.genR),a:()=>S.genR=!S.genR},
+ mhyd:{n:'HYDRAULICS — MAIN system',d:'The Mi-8 controls are far too heavy to move by hand: hydraulic boosters do the work. Pumps on the main gearbox make pressure once the rotor turns. MAIN ON selects the main system; if it fails, the BACKUP system takes over automatically (HYD BACKUP light). With no hydraulics the cyclic barely moves the rotor.',g:()=>OO(S.hyd)+` · main ${S.hydP|0} / backup ${S.hydB|0} kgf/cm²`,a:()=>S.hyd=!S.hyd},
+ nav:{n:'NAV LIGHTS',d:'Red on the left, green on the right, white on the tail.',g:()=>OO(S.nav),a:()=>S.nav=!S.nav},
+ mbeacon:{n:'BEACON (anti-collision)',d:'Two flashing red beacons, on the tail boom and the belly. ON before starting the APU or engines.',g:()=>OO(S.beacon),a:()=>S.beacon=!S.beacon},
+ ldg:{n:'LANDING LIGHTS',d:'Two retractable lights under the nose.',g:()=>OO(S.ldg),a:()=>S.ldg=!S.ldg},
+ msvc:{n:'SERVICE TANK PUMP',d:'The engines and the APU draw fuel from a small service (feed) tank behind the cockpit. This electric booster pump pushes that fuel to them. No service pump = no fuel pressure = no start, or a flame-out.',g:()=>OO(S.svc),a:()=>S.svc=!S.svc},
+ mpL:{n:'TANK PUMPS 1 & 2',d:'Transfer pumps in the left and right main (side) tanks keep the service tank full. Click to switch both.',g:()=>OO(S.pL&&S.pR),a:()=>{const v=!(S.pL&&S.pR);S.pL=S.pR=v}},
+ mfcL:{n:'FIRE COCK 1 (guarded)',d:'Shut-off valve in the fuel line to engine 1, closed in a fire or after shutdown. It must be OPEN for the engine to get fuel.',g:()=>S.fcock[0]?'OPEN':'CLOSED',a:()=>S.fcock[0]=!S.fcock[0]},
+ mfcR:{n:'FIRE COCK 2 (guarded)',d:'Fuel shut-off valve for engine 2.',g:()=>S.fcock[1]?'OPEN':'CLOSED',a:()=>S.fcock[1]=!S.fcock[1]},
+ mapuS:{n:'APU START (AI-9V)',d:'The APU is a small gas turbine in the engine compartment. Its starter runs on battery power; once running (~20 s) it supplies compressed air. That air spins the main engines\' air starters. Needs battery and the service pump.',g:()=>S.apu.on?'APU running':S.apu.start?'starting… '+(S.apu.n|0)+' %':'off',a:()=>{if(S.batt)S.apuReq=true}},
+ mapuX:{n:'APU STOP',d:'Shuts the APU down. Do this once both engines and generators are running; it is not used in flight.',g:()=>S.apu.on?'running':'off',a:()=>{S.apu.on=S.apu.start=false}},
+ msel:{n:'START SELECTOR',d:'Chooses which engine the START button will start: engine 1 (left) or engine 2 (right). Engines are started one at a time.',g:()=>'engine '+(S.sel+1),a:()=>S.sel^=1},
+ mstart:{n:'ENGINE START button',d:'Starts the automatic start sequence on the selected engine: APU air turns the air starter, the gas generator spins up, at ~15 % Ng the igniters light the fuel, and the starter cuts out at ~55 %. The engine settles at ground idle (~66 % Ng) after about 40 s. Watch EGT: a sudden rise past ~750 °C is a hot start.',g:()=>S.eng[S.sel].start?'starting engine '+(S.sel+1):'ready',a:()=>{const E=S.eng[S.sel];if(S.elec&&!E.running)Object.assign(E,{start:true,st:0})}},
+ mabort:{n:'START ABORT',d:'Stops the start sequence immediately (hung or hot start).',g:()=>'',a:()=>S.eng.forEach(E=>E.start=false)},
+ mcondL:{n:'ENGINE 1 CONDITION LEVER (overhead)',d:'STOP: fuel cut off, engine stops. IDLE: ground idle (~66 % Ng) for start and warm-up. AUTO: the engine fuel control governs the rotor at 95 % and gives whatever power the collective asks for. Click to move forward, right-click back.',g:()=>['STOP','IDLE','AUTO'][S.cond[0]],a:b=>S.cond[0]=clamp(S.cond[0]+(b?-1:1),0,2)},
+ mcondR:{n:'ENGINE 2 CONDITION LEVER (overhead)',d:'Same as engine 1, for engine 2.',g:()=>['STOP','IDLE','AUTO'][S.cond[1]],a:b=>S.cond[1]=clamp(S.cond[1]+(b?-1:1),0,2)},
+ rbrake:{n:'ROTOR BRAKE (overhead lever)',d:'Brakes the main-rotor drive. Released before engine start, applied after shutdown below ~30 % rotor RPM to stop and lock the rotor.',g:()=>S.rbrake?'APPLIED':'RELEASED',a:()=>S.rbrake=!S.rbrake},
+ mpbrake:{n:'PARKING BRAKE (wheel brakes)',d:'Locks the main wheels. The Mi-8 has wheels, not skids, so it would roll on a slope or in wind without it. Release before taxi or lift-off.',g:()=>S.pbrake?'ON':'OFF',a:()=>S.pbrake=!S.pbrake},
+ coll:{n:'COLLECTIVE — "pitch-gas" lever',d:'W raise / S lower. Raises the pitch of all five blades together (1° to 15°, shown on the pitch gauge). Mechanically linked to both engines\' fuel controls, so raising it also calls for more power. Turbines take 1–3 s to spool up, so move it smoothly and plan ahead.',g:()=>`${Math.round(C.coll*100)} % · blade pitch ${(F.th*57.3||0).toFixed(1)}°`},
+ twist:{n:'CORRECTION twist grip',d:'T right / G left. On the collective. Fully LEFT limits both engines towards idle (used on the ground). Fully RIGHT gives the engine governors full authority, so they hold the rotor at 95 % automatically. In normal flight it stays fully right.',g:()=>Math.round(S.twist*100)+' % right'},
+ cyc:{n:'CYCLIC stick',d:'Mouse. Tilts the 21 m rotor disc through hydraulic boosters. A 10-tonne helicopter has huge inertia: it answers late and keeps moving, so use small inputs and anticipate.',g:()=>`fwd ${Math.round(C.cy*100)} %, right ${Math.round(C.cx*100)} %`},
+ ped:{n:'PEDALS',d:'A left / D right. The Mi-8 rotor turns CLOCKWISE seen from above (the R44 turns the other way), so engine torque yaws the nose LEFT and you hold RIGHT pedal in a hover.',g:()=>Math.round(C.ped*100)+' % (+ = right)'},
+ mAnn:{n:'WARNING / CAUTION panel',d:'Red = warning, amber = caution, green = system running. Shows starter and APU sequences, engines out, generators off, hydraulic state, brakes, low fuel and low rotor RPM.',g:()=>S.elec?'powered':'no power'}};
+function buildMi8(){
+ model.visible=false;hits.length=0;
+ const MM=new THREE.Group();MM.position.y=-1.9;heli.add(MM);const mm=(g,m,x=0,y=0,z=0,p=MM)=>mk(g,m,x,y,z,p);
+ // ---- HD camouflage paint: olive/brown upper, pale-blue belly, panel seams, rivets, exhaust soot ----
+ const SE=[];for(let u=.05;u<.99;u+=.042)SE.push(u);const STR=[.12,.3,.62,.7,.84,.93];
+ const camo=ctex(4096,1024,(c,w,h)=>{c.fillStyle='#596841';c.fillRect(0,0,w,h);
+  for(let i=0;i<90;i++){c.fillStyle=i%2?'#6f5d3d':'#45522f';c.beginPath();c.ellipse(rnd()*w,h*(.48+rnd()*.52),60+rnd()*240,25+rnd()*70,rnd()*3,0,7);c.fill()}
+  c.fillStyle='#93a6b2';c.beginPath();c.moveTo(0,h*.04);for(let x=0;x<=w;x+=32)c.lineTo(x,h*(.04+.01*Math.sin(x*.01)));for(let x=w;x>=0;x-=32)c.lineTo(x,h*(.46+.012*Math.sin(x*.013)));c.fill();
+  const g=c.createLinearGradient(0,h*.62,0,h*.88);g.addColorStop(0,'rgba(20,18,15,0)');g.addColorStop(.5,'rgba(20,18,15,.22)');g.addColorStop(1,'rgba(20,18,15,0)');c.fillStyle=g;c.fillRect(w*.46,h*.62,w*.4,h*.26);
+  for(let i=0;i<9000;i++){c.fillStyle=`rgba(${rnd()<.5?0:255},${rnd()<.5?0:250},${rnd()<.5?0:230},${rnd()*.05})`;c.fillRect(rnd()*w,rnd()*h,1+rnd()*3,1+rnd()*3)}
+  c.strokeStyle='rgba(25,28,20,.45)';c.lineWidth=3;for(const u of SE){c.beginPath();c.moveTo(u*w,0);c.lineTo(u*w,h);c.stroke()}for(const y of STR){c.beginPath();c.moveTo(0,y*h);c.lineTo(w,y*h);c.stroke()}
+  c.fillStyle='rgba(200,200,180,.25)';for(const u of SE)for(let y=6;y<h;y+=14){c.beginPath();c.arc(u*w+7,y,2,0,7);c.fill()}});
+ const camoN=nmap(ctex(4096,1024,(c,w,h)=>{c.fillStyle='#808080';c.fillRect(0,0,w,h);c.strokeStyle='#383838';c.lineWidth=5;
+  for(const u of SE){c.beginPath();c.moveTo(u*w,0);c.lineTo(u*w,h);c.stroke()}for(const y of STR){c.beginPath();c.moveTo(0,y*h);c.lineTo(w,y*h);c.stroke()}
+  c.fillStyle='#d0d0d0';for(const u of SE)for(let y=6;y<h;y+=14){c.beginPath();c.arc(u*w+7,y,2.6,0,7);c.fill()}for(const y of STR)for(let x=6;x<w;x+=16){c.beginPath();c.arc(x,y*h+8,2.4,0,7);c.fill()}}),3);
+ const P8=new THREE.MeshPhysicalMaterial({map:camo,normalMap:camoN,roughness:.62,clearcoat:.15,clearcoatRoughness:.5}),rub=STD(0x141414,.92);rub.normalMap=grainN;
+ const OL=STD(0x55623d,.6,.05);OL.normalMap=grainN;OL.normalScale.set(.3,.3);const soot=STD(0x1a1918,.7,.4),gm=new THREE.MeshPhysicalMaterial({color:0x29404a,roughness:.2,metalness:.6,clearcoat:1});
+ // ---- fuselage: lofted superellipse sections, cockpit glazing, round cabin windows ----
+ const K8=[[-7.45,.05,1.6,1.35],[-7.3,.5,2.05,.9],[-7.0,.88,2.42,.66],[-6.5,1.12,2.72,.53],[-5.8,1.24,2.92,.5],[-5.0,1.26,2.96,.5],[1.4,1.26,2.96,.5],[2.4,1.22,2.93,.6],[3.1,1.05,2.88,.95],[3.5,.75,2.82,1.6],[3.65,.5,2.8,2.0]],O8={nx:3.4,nt:2.4,nb:4};
+ const thY=y=>{let a=-1.2,b=1.4;for(let i=0;i<40;i++){const m=(a+b)/2;secPt(K8,-2,m,O8).y<y?a=m:b=m}return(a+b)/2},PORTS=[-3.95,-2.75,-1.55,-.35,.85,2.05];
+ const yc=[];for(let j=0;j<=400;j++)yc.push(secPt(K8,-2,-PI/2+j/400*PI,O8).y);const ycab=th=>{let s=Math.asin(Math.sin(th));return yc[clamp(Math.round((s+PI/2)/PI*400),0,400)]};
+ const mask8=(z,th)=>{const s=Math.sin(th),c=Math.cos(th);
+  if(z<-5.3&&z>-7.42){if(s>-.62)return Math.abs(th-PI/2)<.012?0:1;if(z<-6.45&&Math.abs(c)>.16)return 1;return 0}
+  if(Math.abs(c)>.6&&z>-4.3&&z<2.4){const y=ycab(th);for(const pz of PORTS)if((z-pz)**2+(y-2.02)**2<.04)return 1}return 0};
+ const fus=loft(K8,320,200,{...O8,mask:mask8});
+ mm(fus,[P8,M.hide]);{const g=mm(fus,[M.hide,M.glass]);g.castShadow=false;mm(fus,[M.inner,M.hide]).castShadow=false}
+ {const fr=(pts,r=.016)=>mm(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts),pts.length*3,r,10),M.dark),
+   along=(z0,z1,th,n=60)=>Array.from({length:n+1},(_,i)=>secPt(K8,z0+(z1-z0)*i/n,th,O8)),around=(z,t0,t1,n=90)=>Array.from({length:n+1},(_,i)=>secPt(K8,z,t0+(t1-t0)*i/n,O8));
+  for(const z of[-5.3,-6.2,-6.85])fr(around(z,-.67,PI+.67));for(const th of[PI/2,PI/2-.55,PI/2+.55,.03,PI-.03,-.67,PI+.67])fr(along(-7.38,-5.3,th));
+  for(const th of[-PI/2-.16,-PI/2+.16])fr(along(-7.3,-6.45,th));fr(around(-6.45,-PI/2+.16,-.67,30));fr(around(-6.45,PI+.67,1.5*PI-.16,30));
+  const ty=thY(2.02);for(const pz of PORTS)for(const sd of[1,-1]){const p=secPt(K8,pz,sd>0?ty:PI-ty,O8);const t=mm(new THREE.TorusGeometry(.205,.024,12,48),M.dark,p.x,p.y,p.z);t.rotation.y=PI/2}
+  const t0=thY(.8),t1=thY(2.5);fr(along(-4.65,-3.3,PI-t0,20));fr(along(-4.65,-3.3,PI-t1,20));fr(around(-4.65,PI-t1,PI-t0,20));fr(around(-3.3,PI-t1,PI-t0,20));   // sliding door
+  for(const z of[2.55,3.15])fr(around(z,-.9,PI+.9),.007);fr(along(2.55,3.4,-PI/2,20),.007);                                                                      // clamshell doors
+  for(const sd of[1,-1]){const p=secPt(K8,-6.75,sd>0?1.05:PI-1.05,O8);const w=mm(new THREE.BoxGeometry(.03,.02,.5),M.black,p.x*1.01,p.y,p.z);w.rotation.x=.6}}
+ // engine cowling, intakes with dust-protection domes, exhausts, oil-cooler fan, gearbox fairing
+ const KE=[[-4.7,.05,3.25,3.05],[-4.5,.78,3.68,2.86],[-4.0,.95,3.86,2.86],[0,.98,3.92,2.86],[1.8,.92,3.82,2.86],[2.8,.62,3.55,2.88],[3.15,.04,3.15,2.95]];
+ mm(loft(KE,200,128,{nx:3,nt:2.6,nb:5,cf:.3}),P8);
+ for(const sd of[-1,1]){const x=sd*.42;mm(new THREE.TorusGeometry(.27,.05,16,64),M.steel,x,3.32,-4.62);const d=mm(new THREE.CircleGeometry(.26,48),M.black,x,3.32,-4.6);d.rotation.y=PI;
+  const dm=mm(new THREE.SphereGeometry(.42,48,24,0,2*PI,0,PI/2).rotateX(-PI/2).scale(1,1,.75),gm,x,3.32,-4.7);for(let k=0;k<12;k++){const v=mm(new THREE.BoxGeometry(.008,.4,.2),M.steel,x,3.32,-4.82);v.rotation.z=k*PI/12}
+  const ex=mm(new THREE.CylinderGeometry(.21,.26,.95,40,1,true).rotateZ(PI/2),soot,sd*1.12,3.28,-1.2);ex.rotation.y=-sd*.55;ex.material.side=THREE.DoubleSide;
+  mm(new THREE.CylinderGeometry(.06,.06,.35,16).rotateZ(PI/2),M.steel,sd*.98,3.05,1.7)}
+ mm(new THREE.TorusGeometry(.38,.05,16,64),M.steel,0,3.62,2.55).rotation.x=-.9;{const d=mm(new THREE.CircleGeometry(.37,48),M.black,0,3.6,2.52);d.rotation.x=-.9+PI}
+ mm(new THREE.SphereGeometry(.72,48,24).scale(1,.45,1.35),OL,0,3.86,.1);
+ // rotor head: mast, swashplate, 5-arm articulated hub, drooping blades
+ mm(new THREE.CylinderGeometry(.16,.2,.75,48),M.chrome,0,4.12,0);const sw=new THREE.Group();sw.position.y=4.0;MM.add(sw);mm(new THREE.CylinderGeometry(.5,.5,.06,64),M.steel,0,0,0,sw);mm(new THREE.CylinderGeometry(.45,.47,.05,64),M.chrome,0,.06,0,sw);
+ const rT=new THREE.Group();rT.position.y=4.45;MM.add(rT);const rS=new THREE.Group();rT.add(rS);mm(new THREE.CylinderGeometry(.34,.38,.32,48),M.steel,0,0,0,rS);mm(new THREE.CylinderGeometry(.12,.12,.3,24),M.chrome,0,.28,0,rS);
+ const bg=bladeGeo(.05,9.75,.52,.12,200,64,true,-.09);bg.rotateX(PI);const bl=[];
+ for(let k=0;k<5;k++){const az=new THREE.Group();az.rotation.y=k*2*PI/5;rS.add(az);mm(new RB(.7,.13,.22,3,.03),M.steel,.5,0,0,az);mm(new THREE.CylinderGeometry(.06,.06,.3,20),M.chrome,.82,0,0,az);
+  mm(new THREE.CylinderGeometry(.035,.035,.5,12).rotateZ(PI/2),M.steel,.55,.12,.12,az);const cone=new THREE.Group();cone.position.x=.9;az.add(cone);const pit=new THREE.Group();cone.add(pit);
+  mm(bg,M.blade,0,0,0,pit);mm(new RB(.55,.12,.32,3,.03),M.steel,.22,0,0,pit);mm(new THREE.CylinderGeometry(.012,.012,.55,8),M.steel,-.25,-.3,-.18,az);bl.push({cone,pit})}
+ const bz=mm(new THREE.CircleGeometry(10.645,180).rotateX(-PI/2),new THREE.MeshBasicMaterial({map:blurTex,transparent:true,opacity:0,depthWrite:false,side:THREE.DoubleSide}),0,0,0,rT);bz.castShadow=false;
+ // tail boom, pylon, stabilator, tail rotor, bumper
+ mm(loft([[3.0,.66,3.25,1.9],[9.9,.31,3.0,2.42],[10.3,.28,3.02,2.48]],240,96,{nx:2,nt:2,nb:2,cf:.5}),P8);
+ mm(ext([[9.4,2.55],[10.45,2.5],[11.0,4.75],[10.75,4.98],[10.3,4.92],[9.9,3.2]],.3),P8);
+ {const na=x=>.6*(.2969*Math.sqrt(x)-.126*x-.3516*x*x+.2843*x**3-.1036*x**4),p=[];for(let i=0;i<=24;i++){const x=1-i/24;p.push([8.6+x*.9,2.32+na(x)*.9])}for(let i=1;i<24;i++){const x=i/24;p.push([8.6+x*.9,2.32-na(x)*.9])}mm(ext(p,2.9),P8)}
+ mm(new THREE.SphereGeometry(.24,40,24).scale(1,1,1.3),P8,-.1,4.6,10.65);const tH=new THREE.Group();tH.position.set(-.42,4.6,10.62);MM.add(tH);const tS=new THREE.Group();tH.add(tS);
+ {const tg=bladeGeo(.25,1.954,.27,.12,48,36,true,-.1);for(let k=0;k<3;k++){const g=new THREE.Group();g.rotation.x=k*2*PI/3;tS.add(g);const b=mm(tg,M.blade,0,0,0,g);b.rotation.z=PI/2}mm(new THREE.CylinderGeometry(.13,.13,.16,32).rotateZ(PI/2),M.steel,0,0,0,tS)}
+ mm(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new V(0,2.35,9.5),new V(0,1.08,9.95),new V(0,1.0,10.35),new V(0,1.6,10.62)]),60,.045,14),M.steel);
+ // landing gear: twin nose wheels, main wheels on struts, external fuel tanks
+ const tire=(r,t,x,y,z)=>{mm(new THREE.TorusGeometry(r,t,28,80).rotateY(PI/2),rub,x,y,z);mm(new THREE.CylinderGeometry(r*.78,r*.78,t*1.8,40).rotateZ(PI/2),M.steel,x,y,z)};
+ for(const sd of[-1,1])tire(.22,.085,sd*.17,.3,-3.6);mm(new THREE.CylinderGeometry(.06,.07,.85,20),M.chrome,0,.78,-3.6);mm(new THREE.BoxGeometry(.5,.08,.12),M.steel,0,.3,-3.6);
+ const tub=(a,b,r)=>mm(new THREE.TubeGeometry(new THREE.LineCurve3(new V(...a),new V(...b)),8,r,14),M.steel);
+ for(const sd of[-1,1]){tire(.33,.12,sd*2.25,.45,.65);tub([sd*2.12,.5,.65],[sd*1.4,1.95,.65],.075);tub([sd*2.15,.47,.65],[sd*1.12,.62,1.25],.055);tub([sd*2.15,.47,.65],[sd*1.12,.62,.05],.055);
+  mm(new THREE.CapsuleGeometry(.42,2.6,16,48).rotateX(PI/2).scale(.9,1,1),OL,sd*1.62,1.28,-1.2);for(const z of[-2,-.4])mm(new THREE.TorusGeometry(.4,.02,8,48).rotateY(PI/2),M.dark,sd*1.62,1.28,z);
+  mm(new THREE.BoxGeometry(.5,.03,.25),M.dark,sd*.9,.62,-4.0)}
+ for(const sd of[-1,1])mm(new THREE.CylinderGeometry(.015,.02,.55,10).rotateX(PI/2),M.chrome,sd*.55,2.35,-7.2);
+ mm(new THREE.CylinderGeometry(.006,.012,1.2,8),M.black,0,3.6,6.2).rotation.x=-.4;mm(new THREE.BoxGeometry(.04,.3,.25),M.black,0,.4,-2.2);
+ const lt8=(c,x,y,z,r=.05)=>{const m=new THREE.Mesh(new THREE.SphereGeometry(r,16,12),new THREE.MeshBasicMaterial({color:c}));m.position.set(x,y,z);MM.add(m);return m};
+ const nav8=[lt8(0xff2020,-1.62,1.28,-2.75),lt8(0x20ff40,1.62,1.28,-2.75),lt8(0xffffff,0,2.6,10.3)],bcn=[lt8(0xff1010,0,3.12,5.0,.09),lt8(0xff1010,0,.46,-.6,.09)];
+ const ldgs=[-.4,.4].map(x=>{const s=new THREE.SpotLight(0xfff4e0,0,300,.32,.5,1.2);s.position.set(x,.6,-6.3);s.target.position.set(x,-3,-20);MM.add(s,s.target);return s});
+ // ---- cockpit interior ----
+ mm(new THREE.BoxGeometry(2.2,.05,2.3),M.dark,0,.95,-5.9).castShadow=false;
+ for(const x of[-.55,.55]){mm(new RB(.56,.13,.52,3,.04),M.seat,x,1.35,-5.25);const b=mm(new RB(.56,.78,.12,3,.04),M.seat,x,1.8,-4.97);b.rotation.x=-.1}
+ mm(new RB(.45,.1,.45,3,.04),M.seat,0,1.3,-4.75);for(const sd of[-1,1])mm(new THREE.BoxGeometry(.7,2,.06),M.inner,sd*.9,1.95,-4.55);
+ const sticks=[];for(const x of[-.55,.55]){const g=new THREE.Group();g.position.set(x,.97,-5.85);MM.add(g);mm(new THREE.CylinderGeometry(.022,.03,.64,16),M.black,0,.32,0,g);mm(new RB(.06,.14,.07,3,.02),M.black,0,.7,0,g);sticks.push(g)}
+ hit('cyc',new THREE.BoxGeometry(.14,.25,.14),0,.62,0,sticks[0]);
+ const col=new THREE.Group();col.position.set(-.95,1.2,-5.15);MM.add(col);mm(new THREE.CylinderGeometry(.025,.03,.72,16).rotateX(PI/2),M.black,0,0,-.36,col);
+ const grp=new THREE.Group();grp.position.z=-.74;col.add(grp);mm(new THREE.CylinderGeometry(.036,.036,.16,24).rotateX(PI/2),M.dark,0,0,0,grp);mm(new THREE.BoxGeometry(.014,.024,.16),M.red,0,.036,0,grp);
+ hit('coll',new THREE.BoxGeometry(.1,.1,.4),0,0,-.36,col);hit('twist',new THREE.BoxGeometry(.1,.1,.17),0,0,-.74,col);
+ const pd=[];for(const x of[-.69,-.41]){const p=mm(new RB(.1,.16,.03,2,.01),M.dark,x,1.06,-6.12);p.rotation.x=-.5;pd.push(p)}hit('ped',new THREE.BoxGeometry(.4,.2,.12),-.55,1.06,-6.12,MM);
+ // panels: main instrument panel, centre console (start/fuel), overhead (electrics, condition levers, rotor brake)
+ const mkPan=(w,h,ps,pos,rx,bgFn)=>{const cv=document.createElement('canvas');cv.width=w*ps;cv.height=h*ps;const c=cv.getContext('2d'),bgc=document.createElement('canvas');bgc.width=cv.width;bgc.height=cv.height;
+  const tex=new THREE.CanvasTexture(cv);tex.colorSpace=THREE.SRGBColorSpace;tex.anisotropy=8;const G=new THREE.Group();G.position.set(...pos);G.rotation.x=rx;MM.add(G);
+  mm(new THREE.PlaneGeometry(w,h),new THREE.MeshStandardMaterial({map:tex,emissiveMap:tex,emissive:0xffffff,emissiveIntensity:.3,roughness:.75}),0,0,0,G);mm(new THREE.BoxGeometry(w+.04,h+.04,.16),M.dark,0,0,-.081,G);
+  const pn={c,cv,bgc,bx:bgc.getContext('2d'),tex,G,PS:ps,P2:(x,y)=>[w*ps/2+x*ps,h*ps/2-y*ps]};const b=pn.bx;b.fillStyle='#3e676a';b.fillRect(0,0,bgc.width,bgc.height);
+  for(let i=0;i<6000;i++){b.fillStyle=`rgba(0,0,0,${rnd()*.06})`;b.fillRect(rnd()*bgc.width,rnd()*bgc.height,2,2)}return pn};
+ pn8=mkPan(1.6,.5,1000,[0,1.78,-6.25],-.25);cn8=mkPan(.6,.46,1000,[0,1.28,-5.82],-1.0);oh8=mkPan(.9,.46,1000,[0,2.8,-5.75],PI/2-.5);
+ mm(new RB(1.7,.04,.22,3,.015),M.black,0,.27,.06,pn8.G);mm(new THREE.BoxGeometry(.62,.44,.6),M.dark,0,-.04,-.32,cn8.G);
+ const lab=(pn,t,x,y,sz=15,col='#e8eef5')=>{const[X,Y]=pn.P2(x,y);pn.bx.fillStyle=col;pn.bx.font=`bold ${sz}px Arial`;pn.bx.textAlign='center';pn.bx.fillText(t,X,Y)};
+ const tog=(pn,id,x,y,get,guard)=>{const p=new THREE.Group();p.position.set(x,y,0);pn.G.add(p);mm(new THREE.CylinderGeometry(.011,.011,.008,20).rotateX(PI/2),M.chrome,0,0,.004,p);
+  const lv=new THREE.Group();lv.position.z=.008;p.add(lv);mm(new THREE.CylinderGeometry(.0035,.004,.028,10).rotateX(PI/2).translate(0,0,.014),M.chrome,0,0,0,lv);mm(new THREE.SphereGeometry(.005,12,8),M.chrome,0,0,.028,lv);
+  if(guard)for(const s of[-1,1])mm(new THREE.BoxGeometry(.004,.034,.034),M.red,s*.016,0,.017,p);SW8.push([lv,get]);hit(id,new THREE.BoxGeometry(.05,.055,.045),0,0,.02,p)};
+ const btn=(pn,id,x,y,col)=>{const p=new THREE.Group();p.position.set(x,y,0);pn.G.add(p);mm(new THREE.CylinderGeometry(.022,.022,.01,24).rotateX(PI/2),M.black,0,0,.005,p);
+  const m=new THREE.MeshStandardMaterial({color:col,emissive:col,emissiveIntensity:.15,roughness:.4});const k=mm(new THREE.CylinderGeometry(.016,.016,.014,24).rotateX(PI/2),m,0,0,.016,p);hit(id,new THREE.BoxGeometry(.05,.05,.04),0,0,.02,p);return{k,m}};
+ // main panel gauges
+ const g8=(id,x,y,r,n,o,nd,draw,dup)=>{G8.push({id,x,y,r,n,o,nd,draw,dup});if(!CTRL8[id])CTRL8[id]={n,d:GUIDE8_[id.replace(/2$/,'')]||''}};
+ const P=PI;
+ const asiO={min:0,max:350,a0:-.5*P+.3,a1:1.5*P-.3,maj:50,mn:10,lab:[0,50,100,150,200,250,300,350],arcs:[[250,256,'#d22',.86]],t:'km/h',t2:'AIRSPEED'};
+ g8('mAsi',-.70,.10,.055,'AIRSPEED (US-350)',asiO,[[()=>Vv.ias]]);g8('mAsi2',.40,.10,.055,'AIRSPEED (copilot)',asiO,[[()=>Vv.ias]],0,1);
+ g8('mAi',-.58,.10,.062,'ATTITUDE (AGB-3K)',0,0,aiS);g8('mAi2',.53,.10,.062,'ATTITUDE (copilot)',0,0,aiS,1);
+ const altO={min:0,max:10,a0:-.5*P,a1:1.5*P,maj:1,mn:.2,lab:[0,1,2,3,4,5,6,7,8,9],t:'H ×100 m',t2:'ALTIMETER'},altN=[[()=>(Vv.alt%1000)/100,.84,.04],[()=>(Vv.alt%10000)/1000,.52,.08]];
+ g8('mAlt',-.46,.10,.055,'BAROMETRIC ALTIMETER (VD-10)',altO,altN);g8('mAlt2',.66,.10,.055,'ALTIMETER (copilot)',altO,altN,0,1);
+ g8('mPitch',-.345,.12,.04,'ROTOR PITCH (UShV)',{min:0,max:16,a0:.75*P,a1:2.25*P,maj:2,mn:1,lab:[2,6,10,14],arcs:[[14,16,'#d22']],t:'PITCH °'},[[()=>Vv.pitch]]);
+ const nrO={min:0,max:110,a0:.75*P,a1:2.25*P,maj:10,mn:2,lab:[0,20,40,60,80,100],arcs:[[88,92,'#e0b000'],[92,97,'#2bb24c'],[97,103,'#e0b000'],[103,110,'#d22']],t:'Nr %',t2:'ROTOR'};
+ g8('mNr',-.70,-.07,.055,'ROTOR RPM (ITE-1)',nrO,[[()=>Vv.nr,.82,.05,'#ffd166']]);g8('mNr2',.40,-.07,.055,'ROTOR RPM (copilot)',nrO,[[()=>Vv.nr,.82,.05,'#ffd166']],0,1);
+ g8('mHsi',-.58,-.07,.062,'HEADING (HSI)',0,0,hsiD);g8('mHsi2',.53,-.07,.062,'HEADING (copilot)',0,0,hsiD,1);
+ const vsO={min:-30,max:30,a0:.1*P,a1:1.9*P,maj:10,mn:2,lab:[-30,-20,-10,0,10,20,30],fmt:Math.abs,t:'Vy m/s',t2:'VERT SPEED'};
+ g8('mVsi',-.46,-.07,.055,'VERTICAL SPEED (VAR-30)',vsO,[[()=>clamp(Vv.vs,-30,30)]]);g8('mVsi2',.66,-.07,.055,'VERTICAL SPEED (copilot)',vsO,[[()=>clamp(Vv.vs,-30,30)]],0,1);
+ g8('mRalt',-.345,-.06,.04,'RADIO ALTIMETER',{min:0,max:300,a0:-.5*P,a1:1.4*P,maj:50,mn:10,lab:[0,100,200,300],t:'RADIO m'},[[()=>Vv.el?clamp(Vv.agl,0,300):0]]);
+ g8('mNg',-.205,.10,.05,'GAS GENERATOR RPM Ng (dual)',{min:0,max:110,a0:.75*P,a1:2.25*P,maj:10,mn:2,lab:[0,20,40,60,80,100],arcs:[[66,98,'#2bb24c'],[98,101,'#e0b000'],[101,110,'#d22']],t:'Ng %',t2:'1 white · 2 yellow'},[[()=>S.eng[0].ng],[()=>S.eng[1].ng,.64,.06,'#ffd166']]);
+ g8('mEgt',-.085,.10,.05,'EXHAUST GAS TEMP (dual)',{min:0,max:1200,a0:.75*P,a1:2.25*P,maj:200,mn:50,lab:[0,400,800,1200],arcs:[[400,890,'#2bb24c'],[890,990,'#e0b000'],[990,1200,'#d22']],t:'EGT °C',t2:'1 white · 2 yellow'},[[()=>S.eng[0].egt],[()=>S.eng[1].egt,.64,.06,'#ffd166']]);
+ g8('mFuel',.03,.11,.042,'FUEL QUANTITY',{min:0,max:2500,a0:.75*P,a1:2.25*P,maj:500,mn:100,lab:[0,1000,2000],arcs:[[0,270,'#d22']],t:'FUEL kg'},[[()=>Vv.el?S.fuel:0]]);
+ g8('mHyd',.13,.11,.042,'HYDRAULIC PRESSURE (dual)',{min:0,max:100,a0:.75*P,a1:2.25*P,maj:25,mn:5,lab:[0,50,100],arcs:[[45,75,'#2bb24c']],t:'HYD',t2:'main · backup'},[[()=>Vv.el?S.hydP:0],[()=>Vv.el?S.hydB:0,.64,.06,'#ffd166']]);
+ g8('mApuT',.23,.11,.042,'APU EXHAUST TEMP',{min:0,max:900,a0:.75*P,a1:2.25*P,maj:300,mn:50,lab:[0,300,600,900],arcs:[[720,900,'#d22']],t:'APU °C'},[[()=>S.apu.egt]]);
+ const sm=(id,x,n,o,f)=>g8(id,x,-.075,.036,n,{a0:.75*P,a1:2.25*P,...o},[[f]]);
+ sm('mOilL',-.205,'ENGINE 1 OIL PRESSURE',{min:0,max:8,maj:2,mn:.5,lab:[0,4,8],arcs:[[2,4.5,'#2bb24c']],t:'OIL 1'},()=>Vv.el?S.eng[0].oil:0);
+ sm('mOilR',-.12,'ENGINE 2 OIL PRESSURE',{min:0,max:8,maj:2,mn:.5,lab:[0,4,8],arcs:[[2,4.5,'#2bb24c']],t:'OIL 2'},()=>Vv.el?S.eng[1].oil:0);
+ sm('mMgb',-.035,'MAIN GEARBOX OIL PRESSURE',{min:0,max:8,maj:2,mn:.5,lab:[0,4,8],arcs:[[2.5,5,'#2bb24c']],t:'MGB P'},()=>Vv.el?S.mgbP:0);
+ sm('mMgbT',.05,'MAIN GEARBOX OIL TEMP',{min:-50,max:150,maj:50,mn:10,lab:[-50,50,150],arcs:[[30,90,'#2bb24c'],[90,150,'#d22']],t:'MGB °C'},()=>Vv.el?S.mgbT:-50);
+ sm('mVolt',.135,'DC VOLTMETER',{min:0,max:30,maj:10,mn:2,lab:[0,10,20,30],arcs:[[24,29,'#2bb24c']],t:'DC V'},()=>S.volts);
+ sm('mApuP',.23,'APU AIR PRESSURE',{min:0,max:4,maj:1,mn:.25,lab:[0,2,4],arcs:[[1.5,2.6,'#2bb24c']],t:'APU AIR'},()=>S.apu.air);
+ G8.forEach(g=>{dial(pn8.bx,g,pn8);mm(new THREE.TorusGeometry(g.r+.002,.005,16,96),M.black,g.x,g.y,.004,pn8.G);
+  const gl=mm(new THREE.CircleGeometry(g.r,48),new THREE.MeshPhysicalMaterial({transparent:true,opacity:.08,roughness:.02,clearcoat:1,depthWrite:false}),g.x,g.y,.007,pn8.G);gl.castShadow=false;hit(g.id,new THREE.CircleGeometry(g.r,24),g.x,g.y,.009,pn8.G)});
+ lab(pn8,'COMMANDER',-.52,-.2,16,'#cfe');lab(pn8,'ENGINES · SYSTEMS',0,-.2,16,'#cfe');lab(pn8,'CO-PILOT',.53,-.2,16,'#cfe');hit('mAnn',new THREE.PlaneGeometry(1.5,.034),0,.205,.006,pn8.G);
+ // centre console
+ lab(cn8,'APU  AI-9V',-.165,.2,17,'#ffd166');lab(cn8,'ENGINE START',.13,.2,17,'#ffd166');lab(cn8,'FUEL',-.08,.02,17,'#ffd166');
+ const apuS=btn(cn8,'mapuS',-.21,.12,0x2bd24c),apuX=btn(cn8,'mapuX',-.12,.12,0xd22222);lab(cn8,'START',-.21,.075,13);lab(cn8,'STOP',-.12,.075,13);
+ const selK=new THREE.Group();selK.position.set(.03,.12,.01);cn8.G.add(selK);mm(new RB(.022,.05,.016,2,.006),M.black,0,0,0,selK);mm(new THREE.CylinderGeometry(.026,.028,.008,28).rotateX(PI/2),M.chrome,0,0,-.008,selK);hit('msel',new THREE.BoxGeometry(.06,.06,.04),0,0,.01,selK);
+ lab(cn8,'1      2',.03,.165,14);lab(cn8,'SELECT',.03,.075,13);const stB=btn(cn8,'mstart',.13,.12,0xf2f2f2),abB=btn(cn8,'mabort',.22,.12,0xd22222);lab(cn8,'START',.13,.075,13);lab(cn8,'ABORT',.22,.075,13);
+ [['msvc',-.22,()=>S.svc,'SERVICE','PUMP'],['mpL',-.13,()=>S.pL&&S.pR,'TANK','PUMPS'],['mfcL',-.03,()=>S.fcock[0],'FIRE','COCK 1',1],['mfcR',.06,()=>S.fcock[1],'FIRE','COCK 2',1],['mpbrake',.18,()=>S.pbrake,'PARK','BRAKE']]
+  .forEach(([id,x,g,a,b,gd])=>{tog(cn8,id,x,-.09,g,gd);lab(cn8,a,x,-.03,12);lab(cn8,b,x,-.045,12)});
+ // overhead
+ [['batt',-.36,()=>S.batt,'BATT'],['mgenL',-.26,()=>S.genL,'GEN 1'],['mgenR',-.16,()=>S.genR,'GEN 2'],['mhyd',-.04,()=>S.hyd,'HYD MAIN'],['nav',.08,()=>S.nav,'NAV'],['mbeacon',.18,()=>S.beacon,'BEACON'],['ldg',.28,()=>S.ldg,'LDG LT']]
+  .forEach(([id,x,g,t])=>{tog(oh8,id,x,.1,g);lab(oh8,t,x,.16,14)});
+ const cl=[];[-.25,-.13].forEach((x,i)=>{mm(new THREE.BoxGeometry(.018,.16,.01),M.black,x,-.1,.004,oh8.G);const h=new THREE.Group();oh8.G.add(h);mm(new RB(.05,.025,.05,2,.008),i?M.red:M.chrome,0,0,.03,h);
+  mm(new THREE.CylinderGeometry(.006,.006,.03,8).rotateX(PI/2),M.steel,0,0,.012,h);hit(i?'mcondR':'mcondL',new THREE.BoxGeometry(.06,.06,.06),0,0,.03,h);h.position.set(x,-.1,0);cl.push(h);
+  lab(oh8,'ENG '+(i+1),x,.02,14);lab(oh8,'AUTO',x+.055,-.03,11);lab(oh8,'IDLE',x+.055,-.1,11);lab(oh8,'STOP',x+.055,-.17,11)});
+ const rbH=new THREE.Group();rbH.position.set(.16,-.1,.01);oh8.G.add(rbH);mm(new RB(.03,.15,.025,2,.008),M.red,0,-.05,.02,rbH);hit('rbrake',new THREE.BoxGeometry(.07,.18,.06),0,-.05,.03,rbH);lab(oh8,'ROTOR BRAKE',.16,.02,14,'#ff8a8a');
+ for(const pn of[pn8,cn8,oh8]){pn.c.drawImage(pn.bgc,0,0);pn.tex.needsUpdate=true}
+ Object.assign(sun.shadow.camera,{left:-26,right:26,top:26,bottom:-26});sun.shadow.camera.updateProjectionMatrix();
+ M8={MM,rT,rS,bl,bz,sw,tS,sticks,col,grp,pd,nav8,bcn,ldgs,cl,rbH,selK,apuS,apuX,stB,abB};Object.assign(CTRL,CTRL8)}
+// Soviet attitude indicator: the horizon moves with pitch, the aircraft symbol rolls with bank
+function aiS(c,g,pn){const[X,Y]=pn.P2(g.x,g.y),Rr=g.r*pn.PS*.94,el=Vv.el;c.save();c.translate(X,Y);c.beginPath();c.arc(0,0,Rr,0,7);c.clip();
+ c.save();c.translate(0,(el?Vv.pit:0)*Rr*2.2);c.fillStyle='#3a7fc4';c.fillRect(-Rr*2,-Rr*3,Rr*4,Rr*3);c.fillStyle='#6b4426';c.fillRect(-Rr*2,0,Rr*4,Rr*3);
+ c.strokeStyle='#fff';c.lineWidth=2;c.beginPath();c.moveTo(-Rr*2,0);c.lineTo(Rr*2,0);for(let p=-20;p<=20;p+=10)if(p){const y=-p*PI/180*Rr*2.2;c.moveTo(-Rr*.25,y);c.lineTo(Rr*.25,y)}c.stroke();c.restore();
+ c.save();c.rotate(el?Vv.rol:0);c.strokeStyle='#ffcf33';c.lineWidth=5;c.beginPath();c.moveTo(-Rr*.7,0);c.lineTo(-Rr*.12,0);c.moveTo(Rr*.12,0);c.lineTo(Rr*.7,0);c.moveTo(0,-Rr*.12);c.lineTo(0,-Rr*.3);c.stroke();c.fillStyle='#ffcf33';c.beginPath();c.arc(0,0,Rr*.07,0,7);c.fill();c.restore();
+ c.strokeStyle='#fff';c.lineWidth=2;for(const b of[-60,-30,-15,0,15,30,60]){const a=-PI/2+b*PI/180;c.beginPath();c.moveTo(Math.cos(a)*Rr*.86,Math.sin(a)*Rr*.86);c.lineTo(Math.cos(a)*Rr*.98,Math.sin(a)*Rr*.98);c.stroke()}
+ if(!el){c.fillStyle='#d22';c.fillRect(Rr*.1,Rr*.35,Rr*.5,Rr*.22)}c.restore()}
+function hsiD(c,g,pn){const[X,Y]=pn.P2(g.x,g.y),Rr=g.r*pn.PS*.94;c.save();c.translate(X,Y);c.save();c.rotate(-(Vv.el?Vv.hdg:0)*PI/180);c.strokeStyle='#eee';c.fillStyle='#eee';c.textAlign='center';c.textBaseline='middle';
+ for(let d=0;d<360;d+=5){c.lineWidth=d%10?1:2;c.beginPath();c.moveTo(0,-Rr*.95);c.lineTo(0,-Rr*(d%10?.88:.8));c.stroke();if(d%30===0){c.font=`bold ${Rr*.2}px Arial`;c.fillText({0:'N',90:'E',180:'S',270:'W'}[d]||d/10,0,-Rr*.64)}c.rotate(5*PI/180)}
+ c.restore();c.strokeStyle='#ff9b1a';c.lineWidth=3;c.beginPath();c.moveTo(0,-Rr);c.lineTo(0,-Rr*.74);c.moveTo(0,-Rr*.4);c.lineTo(0,Rr*.4);c.moveTo(-Rr*.28,0);c.lineTo(Rr*.28,0);c.stroke();c.restore()}
+const ANN8=[['APU START','#ffb000',()=>S.apu.start],['APU ON','#3c3',()=>S.apu.on],['STARTER 1','#ffb000',()=>S.eng[0].start],['STARTER 2','#ffb000',()=>S.eng[1].start],['ENG 1 OUT','#ff3030',()=>!S.eng[0].running],
+ ['ENG 2 OUT','#ff3030',()=>!S.eng[1].running],['GEN 1 OFF','#ffb000',()=>!(S.genL&&S.eng[0].ng>60)],['GEN 2 OFF','#ffb000',()=>!(S.genR&&S.eng[1].ng>60)],['HYD MAIN','#ff3030',()=>S.hydP<30],['HYD BACKUP','#ffb000',()=>S.hydB>30],
+ ['ROTOR BRAKE','#ffb000',()=>S.rbrake],['PARK BRAKE','#ffb000',()=>S.pbrake],['LOW FUEL','#ff3030',()=>S.fuel<270],['Nr LOW','#ff3030',()=>S.low]];
+function drawPanel8(){const pn=pn8,c=pn.c;c.drawImage(pn.bgc,0,0);const e=new THREE.Euler().setFromQuaternion(F.q,'YXZ'),vb=F.v.clone().sub(wind).applyQuaternion(F.q.clone().invert());
+ Object.assign(Vv,{el:S.elec,ias:Math.max(0,-vb.z*3.6),alt:Math.max(0,F.p.y),vs:F.v.y,agl:Math.max(0,F.agl||0),nr:F.Om/Om0*100,pitch:(F.th||0)*57.3,pit:e.x,rol:-e.z,hdg:((-e.y*180/PI)%360+360)%360});
+ for(const g of G8){if(g.draw)g.draw(c,g,pn);else for(const[f,l,w,col]of g.nd)needle(g,g.A(clamp(f(),g.o.min,g.o.max)),l,w,col,pn)}
+ ANN8.forEach(([t,cl,f],i)=>{const[X,Y]=pn.P2(-.75+i*.1071,.222),w=.1*pn.PS,h=.032*pn.PS,on=S.elec&&f();c.fillStyle=on?cl:'#141a1a';c.shadowColor=cl;c.shadowBlur=on?16:0;c.fillRect(X,Y,w,h);c.shadowBlur=0;
+  c.fillStyle=on?'#120800':'#4a5050';c.font='bold 12px Arial';c.textAlign='center';c.textBaseline='middle';c.fillText(t,X+w/2,Y+h/2)});pn.tex.needsUpdate=true}
+// twin TV3-117 free-turbine engines, AI-9V APU, gearbox-driven hydraulics, electrics. Returns torque delivered to the rotor.
+function mi8Drive(dt,Ql,r){const ap=(x,t,k)=>x+(t-x)*Math.min(1,k*dt),A=S.apu,gen=(S.genL&&S.eng[0].ng>60)||(S.genR&&S.eng[1].ng>60);
+ S.elec=(S.batt&&S.batQ>.05)||gen;S.volts=gen?28.4:S.batt?22+3*S.batQ:0;S.batQ=clamp(S.batQ+(gen?.004:-(A.start?.0035:S.eng.some(E=>E.start)?.002:S.elec?.0002:0))*dt,0,1);
+ const fuelP=S.elec&&S.svc&&S.fuel>0;
+ if(S.apuReq&&S.elec&&fuelP&&!A.on)A.start=true;S.apuReq=false;
+ if(A.start){A.n=Math.min(100,A.n+dt*(A.n<30?3:8));if(A.n>=100){A.start=false;A.on=true}}if(A.on&&!fuelP)A.on=false;if(!A.on&&!A.start)A.n=Math.max(0,A.n-dt*10);
+ A.egt=ap(A.egt,A.start?(A.n>25?640:200):A.on?520:15,A.on||A.start?.6:.08);A.air=A.on?2.2:A.start?A.n/100*1.4:0;
+ // governor: pitch-gas correlator + integral trim holds the rotor at 95 %; the correction grip limits it
+ const auto=S.cond.some(c=>c===2);if(auto){const er=.95-r;S.gi=clamp(S.gi+er*1.2*dt,-.5,1)}
+ const dem=clamp(S.gi+(.95-r)*8+.55*C.coll,0,1)*S.twist,gNg=Math.max(66,60+40*Math.pow(dem,.625));let P=0;
+ S.eng.forEach((E,i)=>{const fOK=fuelP&&S.fcock[i]&&(S.pL||S.pR||S.fuel>0)&&S.cond[i]>0;
+  if(E.start){E.st+=dt;if(A.air>1.2){E.ng+=dt*(E.running?(E.ng<40?1.5:2.2):(E.ng<22?1.6:.15))}if(!E.running&&E.ng>14&&fOK)E.running=true;if(E.ng>=55||E.st>70||!S.elec)E.start=false}
+  if(E.running&&!fOK){E.running=false}
+  if(E.running&&!E.start){const tg=S.cond[i]===2?gNg:66;if(E.ng<64)E.ng+=dt*2.2;else E.ng+=(tg-E.ng)*dt/(1+(E.ng<75?1.6:.4))}
+  if(!E.running&&!E.start)E.ng=Math.max(0,E.ng-dt*(E.ng>20?5:2.5));
+  E.p=E.running?1.45e6*Math.pow(Math.max(0,(E.ng-60)/40),1.6):0;P+=E.p;
+  E.egt=ap(E.egt,E.running?(E.ng<60?700-4*E.ng:430+520*clamp((E.ng-62)/38,0,1.1)):15,E.running?.8:.05);E.oil=ap(E.oil,E.running?clamp(E.ng/20,0,3.8):0,1.2)});
+ if(P>0)S.fuel=Math.max(0,S.fuel-(S.eng.filter(E=>E.running).length*70+P*2.5e-4)/3600*dt);
+ const Qe=Math.min(P/Math.max(F.Om,.25*Om0),2.4e5),Qb=F.Om>.01?600+(S.rbrake?6e4:0):0;F.Om=Math.max(0,F.Om+(Qe-Ql-Qb)/IR*dt);
+ S.hydP=S.hyd?ap(S.hydP,65*sstep(.2,.55,r),2):ap(S.hydP,0,1);S.hydB=(S.hydP<30&&r>.3)?ap(S.hydB,48*sstep(.3,.6,r),2):ap(S.hydB,0,1);S.hb=(S.hydP>30||S.hydB>30)?1:.3;
+ S.mgbP=ap(S.mgbP,4*sstep(.15,.6,r),1);S.mgbT=ap(S.mgbT,15+60*r,.01);return Qe}
+function m8vis(dt,t){const m=M8,rr=F.Om/Om0;ang+=F.Om*dt;tra+=F.Om*5.58*dt;m.rS.rotation.y=-ang;m.tS.rotation.x=tra;m.rT.rotation.set(-F.a1,0,-F.b1);m.bz.material.opacity=sstep(.3,.9,rr)*.5;
+ const cone=-.075+sstep(.25,.8,rr)*(.075+clamp((F.T||0)/(MASS*9.81),0,1.5)*.05);
+ m.bl.forEach((b,k)=>{const ps=-ang+k*2*PI/5;b.cone.rotation.z=cone;b.pit.rotation.x=-((F.th||.017)+C.cy*.08*Math.sin(ps)-C.cx*.06*Math.cos(ps))});
+ m.sw.rotation.set(-C.cy*.1,0,-C.cx*.08);m.sw.position.y=4.0+C.coll*.06;m.sticks.forEach(s=>s.rotation.set(-C.cy*.2,0,-C.cx*.16));m.col.rotation.x=C.coll*.3-.08;m.grp.rotation.z=-S.twist*1.2;
+ m.pd[0].position.z=-6.12+C.ped*.07;m.pd[1].position.z=-6.12-C.ped*.07;for(const[lv,g]of SW8)lv.rotation.x=g()?-.6:.6;
+ m.cl.forEach((h,i)=>h.position.y=-.17+S.cond[i]*.07);m.rbH.rotation.x=S.rbrake?.9:0;m.selK.rotation.z=S.sel?-.6:.6;
+ m.apuS.m.emissiveIntensity=S.apu.start?(t*3%1<.5?1.5:.2):S.apu.on?1.2:.15;m.stB.m.emissiveIntensity=S.eng.some(E=>E.start)?1.2:.15;
+ const el=S.elec;m.nav8.forEach(l=>l.visible=el&&S.nav);m.bcn.forEach((l,i)=>l.visible=el&&S.beacon&&((t*1.1+i*.5)%1)<.12);m.ldgs.forEach(l=>l.intensity=el&&S.ldg?700:0)}
+const GUIDE8_={
+ mAsi:'Airspeed in <b>kilometres per hour</b>, as on all Soviet aircraft (100 km/h ≈ 54 kt). Typical: 120 km/h climb, 200–220 km/h cruise. The red mark at <b>250 km/h</b> is the never-exceed speed. Unreliable below about 40 km/h.',
+ mAi:'Soviet <b>AGB-3K</b> attitude indicator. It works the opposite way to the R44\'s: the <b>yellow aircraft symbol tilts with your bank</b> while the horizon behind it only moves up and down with pitch. Right wing low means you are banking right. Ladder lines are every 10° of pitch.',
+ mAlt:'Altitude in <b>metres</b>. The long needle counts hundreds of metres (one turn = 1,000 m) and the short needle counts thousands. Example: short needle just past 1, long needle on 5 → 1,500 m.',
+ mPitch:'<b>Rotor blade pitch</b> (collective angle) in degrees, from about 1° (collective down) to 15° (fully up). Hovering takes about 6–8°. A quick way to see how hard the rotor is working.',
+ mNr:'<b>Rotor RPM</b> in %. The Mi-8\'s normal value is <b>95 %</b> (about 192 rpm), held automatically by the engine governors when the condition levers are in AUTO and the correction grip is fully right. Green 92–97 %; below 88 % the Nr LOW warning comes on. It is driven by its own small tachometer generator, so it reads even with the batteries off, unlike the R44\'s.',
+ mHsi:'Heading. Read the number under the orange line at the top (N, 3 = 030°, E, S, W).',
+ mVsi:'Vertical speed in <b>metres per second</b>. The needle points left (9 o\'clock) in level flight; up is climbing, down is descending. 5 m/s ≈ 1,000 ft/min. Keep it near zero in a hover, and below about 3 m/s when descending slowly (vortex ring state risk).',
+ mRalt:'<b>Radio altimeter</b>: your true height above the ground in metres, measured by radar under the belly. It matters most below 50 m and for hovering. Needs electrical power.',
+ mNg:'<b>Gas-generator speed (Ng)</b> of both engines in %. White needle = engine 1, yellow = engine 2. A turboshaft has two separate spools: the gas generator (compressor + its turbine) makes hot gas, and a separate <b>free power turbine</b> drives the rotor. Ng shows how hard each engine is working: about 66 % at ground idle, 85–90 % in a hover, up to 101 % at maximum. The two needles should sit together.',
+ mEgt:'<b>Exhaust gas temperature</b> of both engines in °C (white = 1, yellow = 2). Rises with power. Normal hover is about 700–800 °C, with a limit of about 990 °C. During start, watch for a rapid rise past ~750 °C (hot start): press ABORT.',
+ mFuel:'Total fuel in <b>kilograms</b> (the Mi-8 burns about 600–700 kg per hour). LOW FUEL warning below about 270 kg.',
+ mHyd:'<b>Hydraulic pressure</b> in kgf/cm². White = main system, yellow = backup. Normal is 45–65. The pumps are on the main gearbox, so pressure only appears once the rotor turns. If both read zero, the flight controls are not boosted and are almost impossible to move.',
+ mApuT:'<b>APU exhaust temperature</b>. Rises to about 600 °C during the APU start, then settles near 500 °C while it runs. Red above 720 °C.',
+ mOilL:'<b>Engine 1 oil pressure</b> in kgf/cm². Must come up during start; normal 2–4.5.',
+ mOilR:'<b>Engine 2 oil pressure</b>, same limits as engine 1.',
+ mMgb:'<b>Main gearbox oil pressure</b>. The VR-14 gearbox reduces ~15,000 rpm from the engines down to 192 rpm for the rotor; it needs oil pressure 2.5–5 kgf/cm² as soon as the rotor turns.',
+ mMgbT:'<b>Main gearbox oil temperature</b> in °C. Warms up slowly; normal 30–90 °C.',
+ mVolt:'<b>DC bus voltage</b>. About 24 V on batteries alone, about 28 V when the generators are on line.',
+ mApuP:'<b>APU air pressure</b> in kgf/cm²: the compressed air the APU supplies to the engine air starters. Wait for about 2 before pressing ENGINE START.'};
+Object.assign(GUIDE8,GUIDE8_);
+const LES8={start:[['rbrake','Rotor brake — RELEASE (red lever, overhead)',()=>!S.rbrake],['batt','Batteries — ON (overhead)',()=>S.batt],['mbeacon','Beacon — ON (overhead)',()=>S.beacon],
+ ['msvc','Service tank pump — ON (console)',()=>S.svc],['mpL','Tank pumps — ON',()=>S.pL&&S.pR],['mfcL','Fire cocks 1 and 2 — OPEN (guarded)',()=>S.fcock[0]&&S.fcock[1]],
+ ['mapuS','APU — press START; wait for APU ON and air pressure ~2',()=>S.apu.on&&S.apu.air>1.5],['mcondL','Engine 1 condition lever — IDLE (overhead)',()=>S.cond[0]>=1],['msel','Start selector — 1',()=>S.sel===0],
+ ['mstart','ENGINE START — engine 1 to ground idle (Ng ~66 %, EGT below 750 °C)',()=>S.eng[0].running&&S.eng[0].ng>64],['mcondR','Engine 2 condition lever — IDLE',()=>S.cond[1]>=1],['msel','Start selector — 2',()=>S.sel===1],
+ ['mstart','ENGINE START — engine 2 to ground idle',()=>S.eng[1].running&&S.eng[1].ng>64],['mgenL','Generators 1 and 2 — ON (overhead)',()=>S.genL&&S.genR],['mapuX','APU — STOP',()=>!S.apu.on&&!S.apu.start],
+ ['mhyd','Hydraulics MAIN — ON (pressure 45–65)',()=>S.hyd&&S.hydP>40],['mcondL','Both condition levers — AUTO',()=>S.cond[0]===2&&S.cond[1]===2],['twist','Correction grip — fully RIGHT (T): rotor rises to 95 %',()=>F.Om/Om0>.93],
+ ['mpbrake','Parking brake — OFF (console)',()=>!S.pbrake],['coll','Collective — raise slowly (W) to a 1–3 m hover; hold right pedal (D)',()=>F.agl>.6&&F.agl<3.5],['cyc','Hold a stable hover for 5 s',()=>ht>5]],
+ shut:[['coll','Collective — full down',()=>C.coll<.02],['twist','Correction grip — fully LEFT (G)',()=>S.twist<.05],['mcondL','Condition levers — IDLE (cool down)',()=>S.cond[0]===1&&S.cond[1]===1],['mpbrake','Parking brake — ON',()=>S.pbrake],
+ ['mcondL','Condition levers — STOP',()=>S.cond[0]===0&&S.cond[1]===0],['rbrake','Rotor brake — apply below 30 % rotor RPM',()=>S.rbrake&&F.Om/Om0<.3],['mfcL','Fire cocks — CLOSE',()=>!S.fcock[0]&&!S.fcock[1]],
+ ['msvc','Service pump OFF; tank pumps OFF',()=>!S.svc&&!S.pL&&!S.pR],['mgenL','Generators — OFF',()=>!S.genL&&!S.genR],['mhyd','Hydraulics — OFF',()=>!S.hyd],['batt','Batteries — OFF',()=>!S.batt]],
+ free:[['cyc','Free flight — hover-taxi, take off at 100 km/h, and feel how much slower the 10-tonne Mi-8 answers than the R44',()=>false]]};
+if(MI8)buildMi8();
 /* ---------- lessons ---------- */
 const re_=()=>F.We/Om0;
-const LES={start:[['rbrake','Rotor brake — RELEASE',()=>!S.rbrake],['fuelV','Fuel shut-off valve — ON',()=>S.fuelV],['batt','Battery — ON',()=>S.batt],['strobe','Strobe — ON',()=>S.strobe],
+const LES=MI8?LES8:{start:[['rbrake','Rotor brake — RELEASE',()=>!S.rbrake],['fuelV','Fuel shut-off valve — ON',()=>S.fuelV],['batt','Battery — ON',()=>S.batt],['strobe','Strobe — ON',()=>S.strobe],
  ['clutch','Clutch switch — confirm DISENGAGED',()=>!S.clutch],['mix','Mixture — RICH (push in)',()=>S.mix],['twist','Throttle grip — crack open ~10 % (T open / G close)',()=>S.twist>.04&&S.twist<.3],
  ['key','Key — hold START; release to BOTH when engine fires',()=>S.running&&S.key===3],['oilp','Oil pressure — green within 30 s',()=>S.oilP>25],['alt','Alternator — ON',()=>S.alt],['avion','Avionics — ON',()=>S.avion],
  ['twist','Throttle — adjust (T / G) until ENGINE RPM (white tach needle) reads 50–60 %',()=>re_()>.48&&re_()<.68],['clutch','Clutch — ENGAGE (rotor must turn within 5 s)',()=>S.clutch&&F.Om>.3],['ann','Wait — CLUTCH light OUT (keep engine 50–70 %)',()=>S.clutchE>=1],
@@ -503,14 +776,14 @@ const LES={start:[['rbrake','Rotor brake — RELEASE',()=>!S.rbrake],['fuelV','F
  ['avion','Avionics — OFF',()=>!S.avion],['alt','Alternator — OFF',()=>!S.alt],['strobe','Strobe — OFF',()=>!S.strobe],['batt','Battery — OFF',()=>!S.batt],['fuelV','Fuel valve — OFF',()=>!S.fuelV]],
  free:[['cyc','Free flight — try: 3-ft hover, hover-taxi to the runway, take-off at 60 kt, autorotation (throttle closed, collective down, right pedal)',()=>false]]};
 let L={k:'start',done:[]};
-function setLesson(k){L={k,done:LES[k].map(()=>false)};if(k==='shut'&&!S.running)quick();renderSteps()}
+function setLesson(k){L={k,done:LES[k].map(()=>false)};if(k==='shut'&&!(MI8?S.eng[0].running:S.running))quick();renderSteps()}
 function renderSteps(){const st=LES[L.k];let cur=L.done.indexOf(false);$('steps').innerHTML=st.map((s,i)=>`<div class="st ${L.done[i]?'done':i===cur?'cur':''}">${s[1]}${i===cur?'<div id="live" style="color:#8fd3ff;font-weight:400;font-family:Consolas,monospace"></div>':''}</div>`).join('')+(cur<0?'<div style="color:#6fdc8c;margin-top:6px"><b>Lesson complete ✔</b></div>':'')}
 function lessonTick(t){const st=LES[L.k],i=L.done.indexOf(false);hits.forEach(h=>h.material.opacity=0);if(i<0)return;
  const lv=$('live');if(lv)lv.textContent=`now: ENGINE ${Math.round(F.We/Om0*100)} % · ROTOR ${Math.round(F.Om/Om0*100)} % · grip ${Math.round(S.twist*100)} %`;
  if(st[i][2]()){L.done[i]=true;renderSteps();return}const id=st[i][0];hits.forEach(h=>{if(h.userData.id===id)h.material.opacity=.16+.14*Math.sin(t*6)})}
 
 /* ---------- input ---------- */
-const FWD={y:.1,p:-.13},keys={};let camMode=0,look={...FWD},orb={a:.6,e:.3,d:16},drag=null,mouse={x:0,y:0},fov=68,hover=null,lockFail=false;
+const FWD=MI8?{y:-.06,p:-.12}:{y:.1,p:-.13},keys={};let camMode=0,look={...FWD},orb={a:.6,e:.3,d:MI8?34:16},drag=null,mouse={x:0,y:0},fov=68,hover=null,lockFail=false;
 const isAlt=()=>keys.AltLeft||keys.AltRight;
 addEventListener('keydown',e=>{if(e.altKey||e.key==='Alt'||e.code==='Tab')e.preventDefault();keys[e.code]=true;if(e.repeat)return;const k=e.code;
  if(k==='KeyC')camMode=(camMode+1)%3;if(k==='KeyV')camMode=camMode?0:1;if(k==='KeyZ'){look={...FWD};fov=68}if(k==='KeyP')paused=!paused;if(k==='Backspace'){e.preventDefault();reset()}
@@ -518,7 +791,7 @@ addEventListener('keydown',e=>{if(e.altKey||e.key==='Alt'||e.code==='Tab')e.prev
 addEventListener('keyup',e=>{if(e.key==='Alt')e.preventDefault();keys[e.code]=false});
 addEventListener('blur',()=>{for(const k in keys)keys[k]=false});
 const cv=renderer.domElement,ray=new THREE.Raycaster();
-function pickAt(x,y){const r=cv.getBoundingClientRect();ray.setFromCamera(new THREE.Vector2((x-r.left)/r.width*2-1,-(y-r.top)/r.height*2+1),camera);const h=ray.intersectObjects(hits,false)[0];return h&&h.distance<(camMode?60:2.5)?h.object.userData.id:null}
+function pickAt(x,y){const r=cv.getBoundingClientRect();ray.setFromCamera(new THREE.Vector2((x-r.left)/r.width*2-1,-(y-r.top)/r.height*2+1),camera);const h=ray.intersectObjects(hits,false)[0];return h&&h.distance<(camMode?60:PHY.pick)?h.object.userData.id:null}
 let keyHold=false;
 const locked=()=>document.pointerLockElement===cv;
 cv.addEventListener('pointerdown',e=>{
@@ -527,7 +800,7 @@ cv.addEventListener('pointerdown',e=>{
  const x=fl?innerWidth/2:e.clientX,y=fl?innerHeight/2:e.clientY,id=pickAt(x,y),back=e.button===2||e.shiftKey;if(id&&(CTRL[id].a||id==='key'))sfxClick();
  if(id==='key'){if(S.key===3&&!back){S.key=4;keyHold=true}else S.key=clamp(S.key+(back?-1:1),0,3)}
  else if(id==='carb'&&back)S.carb=(S.carb+1)%1.5;
- else if(id&&CTRL[id].a)CTRL[id].a();else if(!id&&!fl)drag={x:e.clientX,y:e.clientY};showTip(x,y,id)});
+ else if(id&&CTRL[id].a)CTRL[id].a(back);else if(!id&&!fl)drag={x:e.clientX,y:e.clientY};showTip(x,y,id)});
 addEventListener('pointerup',()=>{if(keyHold){S.key=3;keyHold=false}drag=null});
 document.addEventListener('pointerlockchange',()=>{drag=null;$('tip').style.display='none'});
 cv.addEventListener('mousemove',e=>{if(!locked())return;const s=+$('sens').value;
@@ -646,16 +919,66 @@ const MAN=`<button id="mx">Close (M)</button><h2>R44 Pilot's Manual — how the 
 <div id="gguide"></div>
 <h3>10 · Every switch, control and gauge</h3><dl id="mref"></dl>`;
 // renders a "photo" of part of the 3D model (positions in model coordinates)
+const SVG8={
+ drive:svg('0 0 760 260',sbx(20,30,150,56,'Engine 1','TV3-117 turboshaft')+sbx(20,170,150,56,'Engine 2','TV3-117 turboshaft')+sbx(215,30,140,56,'Freewheel 1','one-way clutch')+sbx(215,170,140,56,'Freewheel 2','one-way clutch')+
+  sbx(400,100,160,60,'Main gearbox VR-14','15,000 → 192 rpm')+sbx(600,20,140,50,'Main rotor','5 blades · 192 rpm')+sbx(600,190,140,50,'Tail rotor','3 blades · 1,124 rpm')+sbx(400,205,160,44,'Accessories','hydraulic pumps · generators · fan')+
+  ln('M170,58H213')+ln('M170,198H213')+ln('M355,58L398,118')+ln('M355,198L398,142')+ln('M560,118L598,48')+ln('M560,142L598,212')+ln('M480,160V203')+'<text class="s" x="572" y="180">tail shaft</text>'),
+ turb:svg('0 0 760 245','<rect x="20" y="70" width="720" height="90" rx="10" fill="#1d2733" stroke="#8a96a6"/>'+sbx(40,85,120,60,'Compressor','12 stages')+sbx(180,85,120,60,'Combustor','fuel burns')+sbx(320,85,130,60,'Gas-gen turbine','drives compressor')+sbx(480,85,140,60,'Free turbine','drives the rotor')+
+  ln('M160,115H178')+ln('M300,115H318')+ln('M450,115H478')+ln('M620,115H700')+'<text class="y" x="640" y="104">exhaust</text>'+
+  '<path d="M40,60 H450" stroke="#ffd166" stroke-width="3"/><text class="y" x="160" y="50">gas generator spool: speed = Ng</text><path d="M480,170 H620" stroke="#8fd3ff" stroke-width="3"/><text class="t" x="482" y="192">power shaft: speed ∝ Nr</text><text class="s" x="40" y="214">No mechanical link between the two spools, only hot gas. That is why the engine can idle while the</text><text class="s" x="40" y="230">rotor is held by the brake, and why the Mi-8 needs no clutch.</text>')};
+const MAN8=`<button id="mx">Close (M)</button><h2>Mil Mi-8 Pilot's Manual — how the systems work</h2>
+<p>A simplified engineering guide to the Mi-8MTV as modelled in this trainer. It is for learning only, not the real flight manual.</p>
+<h3>1 · Meet the Mi-8: what changes from the R44</h3>
+<dl><dt>Weight</dt><dd>About 10.5 t here (13 t maximum), ten times the R44. Everything happens more slowly and needs anticipation.</dd>
+<dt>Rotor</dt><dd>Five blades, 21.3 m across, 192 rpm (shown as 95 %). Articulated: each blade has its own flapping and lead-lag hinges, so there is no mast bumping, and the blades droop visibly when stopped. It turns <b>clockwise</b> seen from above, the opposite of the R44, so you hold <b>right</b> pedal in a hover.</dd>
+<dt>Engines</dt><dd>Two turboshafts of about 1,950 hp each instead of one 260 hp piston engine. They are started by compressed air from an APU, not by a key, and they respond with a 1–3 s lag.</dd>
+<dt>Controls</dt><dd>Hydraulically boosted: without hydraulic pressure the controls are almost immovable.</dd>
+<dt>Landing gear</dt><dd>Three wheels (a castoring nose wheel and two mains) instead of skids. It can taxi, and needs a parking brake.</dd>
+<dt>Units</dt><dd>Soviet instruments read kilometres per hour, metres, metres per second, kgf/cm² and °C.</dd></dl>
+<h3>2 · Drive train</h3>
+<p>Each engine drives the <b>VR-14 main gearbox</b> through its own <b>freewheel (one-way) clutch</b>. If one engine fails, the other keeps driving and the dead one is simply left behind. The gearbox reduces about 15,000 rpm to 192 rpm for the rotor, sends a long shaft through the tail boom to the tail rotor, and also drives the hydraulic pumps, generators and the big oil-cooler fan on top of the cowling.</p>
+<figure>${SVG8.drive}<figcaption>Two engines, one gearbox. Either engine alone can keep the Mi-8 flying at moderate weight.</figcaption></figure>
+<div class="pics"><figure><img id="ph0" alt="Engine intakes"><figcaption>The two engine intakes above the cockpit with their dust-protection domes (MTV version), the cowling and exhaust pipes.</figcaption></figure>
+<figure><img id="ph1" alt="Rotor head"><figcaption>Five-arm articulated rotor head: hinges, swashplate and blade grips. At rest the long blades droop under their own weight.</figcaption></figure>
+<figure><img id="ph2" alt="Tail rotor"><figcaption>Tail pylon with the three-blade tail rotor, the tail gearbox and the bumper that protects it during flared landings.</figcaption></figure>
+<figure><img id="ph3" alt="Landing gear"><figcaption>Main wheel on its strut, the external fuel tank above it, and the twin nose wheels.</figcaption></figure></div>
+<h3>3 · How a turboshaft engine works</h3>
+<p>Air is compressed, mixed with fuel and burnt; the hot gas then flows through two separate turbines. The first drives the compressor: together they are the <b>gas generator</b>, and their speed is <b>Ng</b>. The second, the <b>free power turbine</b>, is not mechanically connected to the first at all. It is spun only by the gas and drives the rotor through the gearbox.</p>
+<figure>${SVG8.turb}<figcaption>Gas generator and free turbine: the key to understanding every Mi-8 gauge and procedure.</figcaption></figure>
+<p>So there are two speeds to watch: <b>Ng</b> (how hard the engine is working) and <b>Nr</b> (rotor speed, held constant at 95 %). More power means higher Ng and EGT, while Nr stays the same.</p>
+<h3>4 · Starting: APU, air starter, ignition</h3>
+<p>A turbine must be spun to about 15–20 % Ng before it can light, which takes far more power than a battery can give. So the Mi-8 first starts its <b>AI-9V APU</b>, a small turbine of its own started electrically. It then uses the APU's compressed air (about 2 kgf/cm²) to drive each engine's <b>air starter</b>.</p>
+<div class="ex">Start sequence (about 40 s per engine): ENGINE START → the air starter spins the gas generator → at ~15 % Ng fuel and igniters light it → EGT jumps to ~600 °C → the engine accelerates by itself → the starter cuts out at ~55 % → it settles at ground idle (~66 % Ng). Watch EGT (a hot start is a rapid rise past ~750 °C: ABORT) and oil pressure.</div>
+<p>Because of the free turbine, the rotor only begins to turn once the gas flow is strong enough, and at ground idle it settles around 60–65 %.</p>
+<h3>5 · Governing: condition levers, correction grip, pitch-gas lever</h3>
+<p>The <b>condition levers</b> (overhead) select STOP / IDLE / AUTO for each engine. In <b>AUTO</b> each engine's fuel control works as a governor: it measures rotor speed and adds or removes fuel to hold <b>95 %</b>.</p>
+<p>The collective is called the <b>pitch-gas lever</b> (шаг-газ): raising it increases blade pitch and, through a linkage, also asks the engines for more power. The governors then trim the exact amount, just as the R44's correlator and governor do. The <b>correction</b> twist grip on the collective limits how much the governors may give. Fully left holds the engines near idle (for the ground), fully right gives them full authority (for flight).</p>
+<div class="ex">Example: in a hover you raise the collective. The pitch-gas link and the governors increase fuel → Ng climbs from 87 % to 92 % (1–2 s lag) → EGT rises → rotor stays at 95 %. Pull up too fast and the rotor sags briefly because the turbines cannot spool instantly.</div>
+<h3>6 · Fuel system</h3>
+<p>Fuel sits in two main side tanks (plus external tanks). <b>Tank pumps</b> transfer it to a small <b>service tank</b>, from which the <b>service pump</b> feeds the engines and the APU. Each engine also has a guarded <b>fire cock</b>: a shut-off valve, closed in a fire or after shutdown. No service pump or a closed fire cock means no start, or a flame-out.</p>
+<h3>7 · Hydraulics</h3>
+<p>The 21 m rotor produces aerodynamic forces no human could hold, so hydraulic <b>boosters</b> move the swashplate while the pilot only moves their control valves. Pumps on the main gearbox make 45–65 kgf/cm² once the rotor turns. If the MAIN system fails, the BACKUP system takes over automatically (amber light). With neither, the cyclic barely moves the rotor. You can try it: leave HYD MAIN off.</p>
+<h3>8 · Electrical system</h3>
+<p>Two 24 V batteries start the APU and power systems on the ground. The engine-driven <b>generators</b> take over at idle (voltmeter ~28 V). The rotor and Ng tachometers have their own little tachometer generators, so they work with no electrical power. The R44's are electric.</p>
+<h3>9 · Flying a 10-tonne helicopter</h3>
+<p><b>Inertia:</b> the Mi-8 takes seconds to start or stop a movement. Make small inputs, wait, and correct early. <b>Turbine lag:</b> plan power changes ahead of time. <b>Pedals:</b> right pedal in a hover, because torque yaws the nose left. <b>Speed:</b> climb at about 120 km/h, cruise at 200–220 km/h, never exceed 250 km/h. <b>Wheels:</b> release the parking brake before lift-off, and hold it on when landing on a slope. <b>Vortex ring state</b> and <b>ground effect</b> work exactly as in the R44, just with bigger numbers.</p>
+<h3>10 · The cockpit</h3>
+<div class="pics"><figure><img id="ph4" alt="Instrument panel"><figcaption>Main panel: commander's flight instruments on the left, engine and systems gauges in the middle, co-pilot's duplicates on the right, warning lights along the top.</figcaption></figure>
+<figure><img id="ph5" alt="Overhead panel"><figcaption>Overhead panel: batteries, generators, hydraulics, lights, the two engine condition levers and the red rotor-brake lever.</figcaption></figure>
+<figure><img id="ph6" alt="Centre console"><figcaption>Centre console: APU start/stop, the engine start selector and START/ABORT buttons, fuel pumps, fire cocks and the parking brake.</figcaption></figure></div>
+<h3>11 · Reading the round instruments</h3><p>Each picture is taken from your cockpit right now, so the needles show live values.</p><div id="gguide"></div>
+<h3>12 · Every switch, control and gauge</h3><dl id="mref"></dl>`;
 function shoot(pos,tgt,fv=40,w=640,h=380){const cam=new THREE.PerspectiveCamera(fv,w/h,.02,3000);heli.updateMatrixWorld(true);
- cam.position.copy(model.localToWorld(new V(...pos)));cam.lookAt(model.localToWorld(new V(...tgt)));
+ const grp=MI8?M8.MM:model;cam.position.copy(grp.localToWorld(new V(...pos)));cam.lookAt(grp.localToWorld(new V(...tgt)));
  renderer.setSize(w,h,false);renderer.render(scene,cam);const url=renderer.domElement.toDataURL('image/jpeg',.9);renderer.setSize(innerWidth,innerHeight);return url}
-function gaugePic(g){drawPanel();const[X,Y]=P2(g.x,g.y),R=g.r*PS*1.15,c=document.createElement('canvas');c.width=c.height=180;
- c.getContext('2d').drawImage(pc,X-R,Y-R,2*R,2*R,0,0,180,180);return c.toDataURL()}
-function toggleMan(){const m=$('man');if(m.hidden){if(!m.innerHTML){m.innerHTML=MAN;$('mx').onclick=toggleMan;
- $('mref').innerHTML=Object.values(CTRL).map(c=>`<dt>${c.n}</dt><dd>${c.d}</dd>`).join('')}
- const shots=[[[1.55,1.05,.95],[0,.95,.62],38],[[-1.2,.55,1.75],[0,.98,.62],42],[[.95,3.05,-.85],[0,2.65,0],40],[[-1.7,1.85,5.7],[-.22,1.68,6.35],40],[[.33,1.67,-.5],[0,1.15,-1.42],55]];
- shots.forEach((s,i)=>$('ph'+i).src=shoot(...s));
- $('gguide').innerHTML=GA.map(g=>`<div class="gg"><img src="${gaugePic(g)}" alt="${g.n}"><div><b>${g.n}</b><br>${GUIDE[g.id]||g.d}</div></div>`).join('');
+function gaugePic(g,pn=RPN){MI8?drawPanel8():drawPanel();const[X,Y]=pn.P2(g.x,g.y),R=g.r*pn.PS*1.15,c=document.createElement('canvas');c.width=c.height=180;
+ c.getContext('2d').drawImage(pn.cv,X-R,Y-R,2*R,2*R,0,0,180,180);return c.toDataURL()}
+function toggleMan(){const m=$('man');if(m.hidden){if(!m.innerHTML){m.innerHTML=MI8?MAN8:MAN;$('mx').onclick=toggleMan;
+ $('mref').innerHTML=Object.entries(MI8?CTRL8:CTRL).filter(([k])=>!/2$/.test(k)).map(([,c])=>`<dt>${c.n}</dt><dd>${c.d}</dd>`).join('')}
+ const shots=MI8?[[[2.8,4.7,-7.2],[0,3.4,-4.2],40],[[2.2,5.3,-2.2],[0,4.35,0],42],[[-3.6,4.3,7.8],[-.4,4.1,10.5],42],[[4.6,1.1,-2.6],[1.7,.8,-.4],48],[[-.55,2.25,-5.3],[-.1,1.6,-6.3],70],[[-.35,2.15,-5.15],[0,2.8,-5.75],62],[[-.4,2.1,-5.2],[0,1.28,-5.82],55]]
+  :[[[1.55,1.05,.95],[0,.95,.62],38],[[-1.2,.55,1.75],[0,.98,.62],42],[[.95,3.05,-.85],[0,2.65,0],40],[[-1.7,1.85,5.7],[-.22,1.68,6.35],40],[[.33,1.67,-.5],[0,1.15,-1.42],55]];
+ shots.forEach((s,i)=>{const im=$('ph'+i);if(im)im.src=shoot(...s)});
+ $('gguide').innerHTML=(MI8?G8.filter(g=>!g.dup):GA).map(g=>`<div class="gg"><img src="${gaugePic(g,MI8?pn8:RPN)}" alt="${g.n}"><div><b>${g.n}</b><br>${(MI8?GUIDE8:GUIDE)[g.id]||g.d}</div></div>`).join('');
  document.exitPointerLock&&document.exitPointerLock()}m.hidden=!m.hidden}
 $('mb').onclick=toggleMan;
 
@@ -672,16 +995,16 @@ function initAudio(){AC=new (window.AudioContext||window.webkitAudioContext)();c
   if(extra)for(let i=0;i<n;i++)d[i]+=extra(i/sr,i/n);let m=0;for(const v of d)m=Math.max(m,Math.abs(v));for(let i=0;i<n;i++)d[i]/=m||1;
   const s=AC.createBufferSource();s.buffer=b;s.loop=true;s.playbackRate.value=.001;s.start();return s};
  // main rotor: 2 blades × 408 rpm = 13.6 Hz "whop" – low thump + airy crack + swish between passes
- const rot=loop(13.6,20,Object.assign((t)=>Math.sin(2*PI*48*t)*Math.exp(-t*28)*.9+Math.sin(2*PI*95*t)*Math.exp(-t*45)*.5+rnd()*Math.exp(-t*160)*.55,{amp:()=>.85+Math.random()*.3}),
+ const rot=loop(MI8?16:13.6,20,Object.assign((t)=>Math.sin(2*PI*(MI8?30:48)*t)*Math.exp(-t*(MI8?16:28))*.9+Math.sin(2*PI*95*t)*Math.exp(-t*45)*.5+rnd()*Math.exp(-t*160)*.55,{amp:()=>.85+Math.random()*.3}),
   (t,u)=>rnd()*.06*(.6+.4*Math.cos(2*PI*u*20)));
  // blade-vortex-interaction slap (descents / loaded turns)
- const slap=loop(13.6,20,(t)=>rnd()*Math.exp(-t*420)+Math.sin(2*PI*260*t)*Math.exp(-t*120)*.6);
+ const slap=loop(MI8?16:13.6,20,(t)=>rnd()*Math.exp(-t*420)+Math.sin(2*PI*260*t)*Math.exp(-t*120)*.6);
  // Lycoming O-540: 6 cyl at 2718 rpm → 136 firings/s, uneven per cylinder for the piston growl
  const cylA=[1,.86,.95,.78,1.05,.9];
  const eng=loop(136,48,Object.assign((t,k)=>(Math.sin(2*PI*70*t)*.7+rnd()*.8)*Math.exp(-t*230)+Math.sin(2*PI*230*t)*Math.exp(-t*400)*.3,{amp:k=>cylA[k%6]*(.9+Math.random()*.2)}),
   (t)=>Math.sin(2*PI*22.6*t)*.25);
  // tail rotor: 2 blades × ~2426 rpm ≈ 81 Hz buzz
- const tr=loop(80.9,40,(t)=>rnd()*Math.exp(-t*900)+Math.sin(2*PI*240*t)*Math.exp(-t*300)*.5);
+ const tr=loop(MI8?56.2:80.9,40,(t)=>rnd()*Math.exp(-t*900)+Math.sin(2*PI*240*t)*Math.exp(-t*300)*.5);
  const nb=AC.createBuffer(1,sr*2,sr),nd=nb.getChannelData(0);for(let i=0;i<nd.length;i++)nd[i]=rnd();
  const noise=()=>{const s=AC.createBufferSource();s.buffer=nb;s.loop=true;s.start();return s};
  const osc=(t,f)=>{const o=AC.createOscillator();o.type=t;o.frequency.value=f;o.start();return o};
@@ -694,7 +1017,7 @@ function initAudio(){AC=new (window.AudioContext||window.webkitAudioContext)();c
  const so=osc('sawtooth',120);so.connect(flt('lowpass',1200)).connect(stg).connect(out);
  const co=osc('square',180);co.connect(flt('lowpass',800)).connect(cg).connect(out);
  const ho=osc('square',750);ho.connect(flt('bandpass',1500,1)).connect(hg).connect(out);
- au={out,rot,slap,eng,tr,ef,wf,go,go2,so,rg,sg,eg,tg,wg,gg,stg,cg,hg,xg}}
+ au={out,rot,slap,eng,tr,ef,wf,go,go2,so,rg,sg,eg,tg,wg,gg,stg,cg,hg,xg};if(MI8)initTurb(out,gn,flt,noise,osc)}
 function sfxClick(){if(!AC)return;const s=AC.createBufferSource(),b=AC.createBuffer(1,600,AC.sampleRate),d=b.getChannelData(0);
  for(let i=0;i<600;i++)d[i]=(Math.random()*2-1)*Math.exp(-i/60);s.buffer=b;const g=AC.createGain();g.gain.value=.35;s.connect(g).connect(AC.destination);s.start()}
 function updAudio(){if(!au)return;const t=AC.currentTime,re=F.We/Om0,rr=F.Om/Om0,s=(p,v,k=.08)=>p.setTargetAtTime(v,t,k);
@@ -708,8 +1031,18 @@ function updAudio(){if(!au)return;const t=AC.currentTime,re=F.We/Om0,rr=F.Om/Om0
  s(au.wf.frequency,150+ias*25);s(au.wg.gain,clamp(ias/60,0,1)**2*(inside?.25:.15));
  s(au.go.frequency,30+870*rr);s(au.go2.frequency,45+1305*rr);s(au.gg.gain,(inside?.018:.004*att)*rr);
  s(au.so.frequency,80+500*re);s(au.stg.gain,S.starter?.12:0,.02);s(au.cg.gain,S.cm&&S.elec?.03:0,.02);
- s(au.hg.gain,S.low&&rr>.1?.07:0,.01);s(au.out.frequency,inside?2600:16000,.2)}
+ s(au.hg.gain,S.low&&rr>.1?.07:0,.01);s(au.out.frequency,inside?2600:16000,.2);if(au.tb)updTurb(s,inside,att)}
 $('start').onclick=()=>{$('start').style.display='none';try{initAudio()}catch(e){}lockMouse()};
+// Mi-8 turbine sounds: per-engine compressor whine + combustion roar, APU whine, air-starter hiss
+function initTurb(out,gn,flt,noise,osc){const tb=[0,1].map(()=>{const w1=osc('sine',3000),w2=osc('sine',5200),wg=gn(0);w1.connect(wg);w2.connect(wg);wg.connect(out);
+  const rg=gn(0),rf=flt('bandpass',600,.6);noise().connect(rf).connect(rg).connect(out);return{w1,w2,wg,rg,rf}});
+ const ap=osc('sine',6000),apg=gn(0);ap.connect(apg).connect(out);const an=gn(0);noise().connect(flt('bandpass',1800,.8)).connect(an).connect(out);const hs=gn(0);noise().connect(flt('highpass',2500)).connect(hs).connect(out);au.tb={tb,ap,apg,an,hs}}
+function updTurb(s,inside,att){const T=au.tb,k=inside?1:att;
+ S.eng.forEach((E,i)=>{const n=E.ng/100,e=T.tb[i];s(e.w1.frequency,60+3200*n);s(e.w2.frequency,90+5400*n);s(e.wg.gain,(E.ng>3?.01+.03*n*n:0)*k);s(e.rf.frequency,200+700*n);s(e.rg.gain,(E.running?.05+.25*E.p/1.45e6:E.ng>3?.03*n:0)*k)});
+ const a=S.apu.n/100;s(T.ap.frequency,200+6500*a);s(T.apg.gain,a>.02?.02*k:0);s(T.an.gain,a*.08*k);s(T.hs.gain,S.eng.some(E=>E.start)?.06*k:0)}
+// aircraft picker (start screen + side panel): switching reloads the page with #r44 / #mi8
+document.querySelectorAll('.pick button').forEach(b=>{if(b.dataset.a===AIR)b.classList.add('on');b.onclick=e=>{e.stopPropagation();if(b.dataset.a!==AIR){location.hash=b.dataset.a;location.reload();return}$('start').onclick()}});
+$('air').value=AIR;$('air').onchange=e=>{location.hash=e.target.value;location.reload()};
 
 /* ---------- loop ---------- */
 window.SIM={F,S,C,step,hits,camera};reset();let last=performance.now(),ang=0,tra=0,pt=0;const tmpE=new THREE.Euler();
@@ -718,27 +1051,27 @@ function frame(now){requestAnimationFrame(frame);const dt=Math.min(.05,(now-last
  if(!paused&&!F.crashed){const n=Math.ceil(dt*240);for(let i=0;i<n;i++)step(dt/n);if(S.running&&S.oilP>20)S.hobbs+=dt/3600}
  ht=F.agl>.3&&F.agl<3&&F.v.length()<1.2&&!F.touch?ht+dt:0;
  heli.position.copy(F.p);heli.quaternion.copy(F.q);
- ang+=F.Om*dt;tra+=F.Om*5.95*dt;rSpin.rotation.y=ang;trSpin.rotation.x=tra;rTilt.rotation.set(-F.a1,0,-F.b1);
- const rr=F.Om/Om0;blur.material.opacity=sstep(.25,.9,rr)*.55;
+ const rr=F.Om/Om0;if(MI8)m8vis(dt,t);else{ang+=F.Om*dt;tra+=F.Om*5.95*dt;rSpin.rotation.y=ang;trSpin.rotation.x=tra;rTilt.rotation.set(-F.a1,0,-F.b1);
+ blur.material.opacity=sstep(.25,.9,rr)*.55;
  blades.forEach((b,k)=>{const ps=ang+k*PI;b.cone.rotation.z=clamp((F.T||0)/(MASS*9.81),-.3,1.5)*.035;b.pit.rotation.x=(F.th||.012)+(C.cy*.1)*Math.sin(ps)-(C.cx*.08)*Math.cos(ps)});
  swash.rotation.set(-C.cy*.12,0,-C.cx*.1);swash.position.y=2.42+C.coll*.05;
  cyc.rotation.set(-C.cy*.22,0,-C.cx*.18);col.rotation.x=C.coll*.32-.08;grip.rotation.z=S.thr*1.2;peds[0].position.z=-1.5+C.ped*.07;peds[1].position.z=-1.5-C.ped*.07;
  for(const[id]of SWX)SW[id].rotation.x=S[id]?-.6:.6;keyB.rotation.z=-(S.key-2)*.5;mixK.position.z=S.mix?.012:.045;carbK.position.z=.012+S.carb*.035;fuelL.rotation.z=S.fuelV?0:-PI/2;rbL.position.z=S.rbrake?.03:.01;
- const el=S.elec;navL.forEach(l=>l.visible=el&&S.nav);strobeL.visible=el&&S.strobe&&(t*1.2%1)<.08;ldg.intensity=el&&S.ldg?400:0;
+ const el=S.elec;navL.forEach(l=>l.visible=el&&S.nav);strobeL.visible=el&&S.strobe&&(t*1.2%1)<.08;ldg.intensity=el&&S.ldg?400:0;}
  // camera
  camera.fov+=(fov*(camMode?1:1)-camera.fov)*.2;camera.updateProjectionMatrix();
- if(camMode===0){camera.position.copy(new V(.33,.5,-.55).applyQuaternion(F.q).add(F.p));camera.quaternion.copy(F.q).multiply(new THREE.Quaternion().setFromEuler(tmpE.set(look.p,look.y,0,'YXZ')))}
- else{tmpE.setFromQuaternion(F.q,'YXZ');const yaw=camMode===1?tmpE.y+(look.y-FWD.y)*1.5:orb.a,e=camMode===1?.3:orb.e,dd=camMode===1?17:orb.d;
+ if(camMode===0){camera.position.copy((MI8?new V(-.55,.33,-5.32):new V(.33,.5,-.55)).applyQuaternion(F.q).add(F.p));camera.quaternion.copy(F.q).multiply(new THREE.Quaternion().setFromEuler(tmpE.set(look.p,look.y,0,'YXZ')))}
+ else{tmpE.setFromQuaternion(F.q,'YXZ');const yaw=camMode===1?tmpE.y+(look.y-FWD.y)*1.5:orb.a,e=camMode===1?.3:orb.e,dd=camMode===1?(MI8?32:17):orb.d;
   const tp=new V(Math.sin(yaw)*Math.cos(e)*dd,Math.sin(e)*dd+1,Math.cos(yaw)*Math.cos(e)*dd).add(F.p);tp.y=Math.max(tp.y,groundH(tp.x,tp.z)+.5);
   camera.position.lerp(tp,camMode===1?.08:1);if(camMode===1){const fw=new V(0,0,-1).applyQuaternion(F.q);fw.y=0;fw.normalize();camera.lookAt(F.p.x+fw.x*9,F.p.y+1,F.p.z+fw.z*9)}else camera.lookAt(F.p.x,F.p.y+.5,F.p.z)}
  sun.position.copy(F.p).addScaledVector(sunDir,150);sun.target.position.copy(F.p);
  const ws=wind.length();sockArm.rotation.set(-PI/2*(1-sstep(0,7,ws))*0.85,Math.atan2(wind.x,wind.z),0);
- if(t-pt>.033){pt=t;drawPanel();lessonTick(t);updAudio();
+ if(t-pt>.033){pt=t;MI8?drawPanel8():drawPanel();lessonTick(t);updAudio();
   const e2=tmpE.setFromQuaternion(F.q,'YXZ'),vb=F.v.clone().sub(wind).applyQuaternion(F.q.clone().invert());
   $('hud').textContent=`IAS ${Math.max(0,-vb.z*1.944).toFixed(0).padStart(3)} kt   GS ${(Math.hypot(F.v.x,F.v.z)*1.944).toFixed(0).padStart(3)} kt   HDG ${String(Math.round(((-e2.y*180/PI)%360+360)%360)).padStart(3,'0')}°
 AGL ${(F.agl*3.281).toFixed(0).padStart(4)} ft   VS ${(F.v.y*196.85).toFixed(0).padStart(5)} fpm
-ROTOR ${(rr*100).toFixed(0).padStart(3)} %   ENG ${(F.We/Om0*100).toFixed(0).padStart(3)} %   MAP ${(S.map||0).toFixed(1)}"
-COLL ${(C.coll*100).toFixed(0).padStart(3)} %   PEDAL ${(C.ped*100).toFixed(0).padStart(4)} %   THR ${(S.thr*100).toFixed(0).padStart(3)} %
+ROTOR ${(rr*100).toFixed(0).padStart(3)} %   ${MI8?`Ng ${S.eng[0].ng.toFixed(0)}/${S.eng[1].ng.toFixed(0)} %   EGT ${S.eng[0].egt.toFixed(0)}/${S.eng[1].egt.toFixed(0)} °C   APU ${S.apu.on?"ON":S.apu.start?"START":"off"}`:`ENG ${(F.We/Om0*100).toFixed(0).padStart(3)} %   MAP ${(S.map||0).toFixed(1)}"`}
+COLL ${(C.coll*100).toFixed(0).padStart(3)} %   PEDAL ${(C.ped*100).toFixed(0).padStart(4)} %   ${MI8?"CORR":"THR"} ${((MI8?S.twist:S.thr)*100).toFixed(0).padStart(3)} %${MI8?`   IAS ${Math.max(0,-vb.z*3.6).toFixed(0)} km/h   RALT ${Math.max(0,F.agl).toFixed(1)} m`:""}
 ${F.vrs>.3?'⚠ VORTEX RING STATE ':''}${S.ice>.1?'⚠ CARB ICE ':''}${S.low?'⚠ LOW ROTOR RPM ':''}${paused?'⏸ PAUSED ':''}${['COCKPIT','CHASE','ORBIT'][camMode]} view`;
   if(locked()){const id=isAlt()?pickAt(innerWidth/2,innerHeight/2):null;if(id!==hover)showTip(innerWidth/2,innerHeight/2,id)}
   if(hover)$('tip').querySelector('i')&&($('tip').querySelector('i').textContent='Now: '+(CTRL[hover].g?CTRL[hover].g():''))}
