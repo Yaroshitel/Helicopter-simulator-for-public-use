@@ -1,0 +1,628 @@
+<!doctype html>
+<html lang="en">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="utf-8">
+<title>R44 Trainer</title>
+<style>
+html,body{margin:0;height:100%;overflow:hidden;background:#000;font-family:system-ui,Segoe UI,sans-serif;color:#e8eef5}
+canvas{display:block}
+.box{position:fixed;background:rgba(10,14,20,.82);border:1px solid #2c3a4a;border-radius:10px;padding:10px 12px;font-size:12.5px;line-height:1.45}
+#panel{right:12px;top:12px;width:300px;max-height:calc(100% - 50px);overflow:auto}
+#panel h3{margin:2px 0 6px;font-size:14px;color:#ffd166}
+#panel select,#panel button{background:#1b2533;color:#e8eef5;border:1px solid #3a4a5c;border-radius:6px;padding:4px 6px;font-size:12px}
+#panel label{display:block;margin-top:5px}
+.row{display:flex;gap:6px;margin:8px 0}.row button{flex:1;cursor:pointer}
+.st{padding:2px 0 2px 20px;position:relative;color:#8795a6}
+.st:before{content:'○';position:absolute;left:3px}
+.st.done{color:#6fdc8c}.st.done:before{content:'✓'}
+.st.cur{color:#fff;font-weight:600}.st.cur:before{content:'▶';color:#ffd166}
+#help{left:12px;top:12px;max-width:310px}
+#hud{left:12px;bottom:12px;font:12px/1.45 Consolas,ui-monospace,monospace;white-space:pre}
+#tip{display:none;pointer-events:none;max-width:340px;z-index:5}
+#tip b{color:#ffd166;font-size:13.5px}#tip i{color:#8fd3ff;font-style:normal;display:block;margin-top:4px}
+#msg{position:fixed;left:50%;top:38%;transform:translate(-50%,-50%);font-size:26px;font-weight:700;text-shadow:0 2px 8px #000;display:none;text-align:center}
+#start{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;flex-direction:column;background:rgba(0,0,0,.65);z-index:9;cursor:pointer;font-size:15px;text-align:center}
+#start h1{margin:0 0 8px;color:#ffd166}
+kbd{background:#223;border:1px solid #445;border-radius:3px;padding:0 4px;font-size:11px}
+</style>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+<div id="start"><h1>R44 Training Simulator</h1><div>Click to take the controls (enables sound)<br><small>Mouse = cyclic · W/S collective · A/D pedals · hold <b>Alt</b> to look around and use switches — aim at any switch or gauge to learn what it does.</small></div></div>
+<div id="help" class="box"><b style="color:#ffd166">Controls</b> <small>(H hides panels)</small><br>
+Click the view to take the controls (<kbd>Esc</kbd> releases the mouse)<br>
+Mouse left/right = roll · forward/back = pitch (cyclic) · <kbd>Space</kbd> centre cyclic<br>
+<b>Hold <kbd>Alt</kbd></b> = free look: the cyclic stays put, aim the centre dot at a switch and click (right-click = turn back, hold on key BOTH = START)<br>
+Collective <kbd>W</kbd> up / <kbd>S</kbd> down<br>
+Yaw pedals <kbd>A</kbd> left / <kbd>D</kbd> right · <kbd>X</kbd> centre<br>
+Throttle twist <kbd>T</kbd> open / <kbd>G</kbd> close<br>
+<kbd>V</kbd> 1st ⇄ 3rd person · <kbd>C</kbd> cycle cockpit/chase/orbit · wheel zoom · <kbd>Z</kbd> reset view<br>
+Pause <kbd>P</kbd> · Reset <kbd>Backspace</kbd> · <b>Manual <kbd>M</kbd></b> · Gamepad supported</div>
+<div id="mode" class="box" style="left:50%;top:12px;transform:translateX(-50%);font-weight:600"></div>
+<div id="man" class="box" hidden style="left:50%;top:50%;transform:translate(-50%,-50%);width:min(780px,92vw);max-height:86vh;overflow:auto;z-index:8;font-size:13.5px;line-height:1.55;padding:18px 22px;background:rgba(10,14,20,.97)"></div>
+<style>#man h2{color:#ffd166;margin:0 0 6px;font-size:20px}#man h3{color:#ffd166;margin:16px 0 4px;font-size:15px}#man p{margin:4px 0 8px}#man .ex{background:#152030;border-left:3px solid #8fd3ff;padding:6px 10px;margin:6px 0}#man dt{font-weight:600;color:#e8eef5;margin-top:6px}#man dd{margin:0 0 4px 14px;color:#b8c4d2}#man button{float:right;background:#1b2533;color:#e8eef5;border:1px solid #3a4a5c;border-radius:6px;padding:4px 10px;cursor:pointer}</style>
+<div id="xh" hidden style="position:fixed;left:50%;top:50%;width:14px;height:14px;margin:-7px 0 0 -7px;border:2px solid #ffd166;border-radius:50%;box-shadow:0 0 0 1px #000;pointer-events:none;z-index:4"></div>
+<div id="stick" class="box" style="right:12px;bottom:12px;width:90px;height:90px;padding:0"><div style="position:absolute;left:50%;top:0;bottom:0;border-left:1px solid #445"></div><div style="position:absolute;top:50%;left:0;right:0;border-top:1px solid #445"></div><div id="sdot" style="position:absolute;width:10px;height:10px;border-radius:5px;background:#ffd166;margin:-5px 0 0 -5px"></div><div style="position:absolute;left:4px;top:2px;font-size:10px;color:#889">CYCLIC</div></div>
+<div id="panel" class="box"><h3>Lesson</h3>
+<select id="les"><option value="start">1 · Cold start → first hover</option><option value="shut">2 · Shutdown</option><option value="free">3 · Free flight</option></select>
+<div id="steps" style="margin-top:6px"></div>
+<div class="row"><button id="qs">Quick start</button><button id="rs">Reset</button></div>
+<div class="row"><button id="mb">📖 Pilot's manual (M)</button></div>
+<label><input type="checkbox" id="sas" checked> Training stability assist (rate damping)</label>
+<label>Mouse sensitivity <input type="range" id="sens" min="0.3" max="3" step="0.1" value="1" style="width:110px"></label>
+<label>Wind <select id="wind"><option value="0">Calm</option><option value="4" selected>8 kt from 300°</option><option value="9">18 kt gusty</option></select></label>
+</div>
+<div id="tip" class="box"></div><div id="hud" class="box"></div><div id="msg"></div>
+<script type="module">
+import * as THREE from 'three';
+import {Sky} from 'three/addons/objects/Sky.js';
+import {RoundedBoxGeometry as RB} from 'three/addons/geometries/RoundedBoxGeometry.js';
+const V=THREE.Vector3,PI=Math.PI,$=id=>document.getElementById(id);
+const clamp=(x,a,b)=>x<a?a:x>b?b:x,sstep=(a,b,x)=>{x=clamp((x-a)/(b-a),0,1);return x*x*(3-2*x)};
+
+/* ---------- renderer / scene ---------- */
+const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));renderer.setSize(innerWidth,innerHeight);
+renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=0.5;
+renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+document.body.prepend(renderer.domElement);
+const scene=new THREE.Scene(),camera=new THREE.PerspectiveCamera(68,innerWidth/innerHeight,0.03,12000);
+addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();renderer.setSize(innerWidth,innerHeight)});
+const sky=new Sky();sky.scale.setScalar(10000);const su=sky.material.uniforms;
+su.turbidity.value=3.5;su.rayleigh.value=1.3;su.mieCoefficient.value=0.004;su.mieDirectionalG.value=0.85;
+const sunDir=new V().setFromSphericalCoords(1,52*PI/180,150*PI/180);su.sunPosition.value.copy(sunDir);
+const pm=new THREE.PMREMGenerator(renderer),es=new THREE.Scene();es.add(sky);scene.environment=pm.fromScene(es).texture;scene.add(sky);
+scene.fog=new THREE.FogExp2(0xb9cadb,0.00016);
+const sun=new THREE.DirectionalLight(0xfff0dc,3.4);sun.castShadow=true;sun.shadow.mapSize.set(4096,4096);
+Object.assign(sun.shadow.camera,{left:-22,right:22,top:22,bottom:-22,near:1,far:400});sun.shadow.bias=-0.0002;sun.shadow.normalBias=0.02;
+scene.add(sun,sun.target,new THREE.HemisphereLight(0xcfe4ff,0x56603f,0.7));
+
+/* ---------- textures ---------- */
+function ctex(w,h,draw,rep){const c=document.createElement('canvas');c.width=w;c.height=h;draw(c.getContext('2d'),w,h);
+ const t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.anisotropy=8;
+ if(rep){t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(rep,rep)}return t}
+const speck=(c,w,h,base,n,lo,rng)=>{c.fillStyle=base;c.fillRect(0,0,w,h);for(let i=0;i<n;i++){const v=lo+Math.random()*rng|0;c.fillStyle=`rgb(${v},${v},${v})`;c.fillRect(Math.random()*w,Math.random()*h,1+Math.random()*2,1+Math.random()*3)}};
+const grassTex=ctex(512,512,(c,w,h)=>speck(c,w,h,'#999',70000,100,140),900);
+const concTex=ctex(512,512,(c,w,h)=>{speck(c,w,h,'#b5b3ad',30000,150,80);c.strokeStyle='#6d6b66';c.lineWidth=3;for(let i=0;i<=4;i++){c.beginPath();c.moveTo(i*128,0);c.lineTo(i*128,h);c.moveTo(0,i*128);c.lineTo(w,i*128);c.stroke()}},10);
+const padTex=ctex(1024,1024,(c,w)=>{speck(c,w,w,'#9e9c97',40000,130,90);c.strokeStyle='#f2f2ee';c.lineWidth=26;c.beginPath();c.arc(512,512,440,0,7);c.stroke();
+ c.strokeStyle='#e7c21b';c.lineWidth=14;c.beginPath();c.arc(512,512,470,0,7);c.stroke();c.fillStyle='#f2f2ee';c.fillRect(330,280,70,464);c.fillRect(624,280,70,464);c.fillRect(400,476,224,70)});
+const rwyTex=ctex(256,2048,(c,w,h)=>{speck(c,w,h,'#3c3d3f',40000,40,50);c.fillStyle='#e8e8e8';for(let y=40;y<h;y+=160)c.fillRect(124,y,8,90);c.fillRect(8,0,6,h);c.fillRect(w-14,0,6,h)});
+const paintTex=ctex(2048,512,(c,w,h)=>{c.fillStyle='#f4f4f2';c.fillRect(0,0,w,h);
+ const band=(v0,v1,col)=>{c.fillStyle=col;c.fillRect(0,(1-v1)*h,w,(v1-v0)*h)};
+ band(.950,.968,'#a3121b');band(.944,.948,'#1d2a5a');band(.532,.550,'#a3121b');band(.552,.556,'#1d2a5a');
+ c.strokeStyle='rgba(60,60,60,.65)';c.lineWidth=2;
+ for(const u of[.325,.50,.63,.70]){c.beginPath();c.moveTo(u*w,h*.02);c.lineTo(u*w,h*.20);c.moveTo(u*w,h*.30);c.lineTo(u*w,h*.48);c.stroke()}});
+const sockTex=ctex(256,64,(c)=>{for(let i=0;i<5;i++){c.fillStyle=i%2?'#f4f4f4':'#ff5a14';c.fillRect(i*51.2,0,52,64)}});
+const blurTex=ctex(512,512,(c)=>{const g=c.createRadialGradient(256,256,20,256,256,256);g.addColorStop(0,'rgba(20,20,20,0)');g.addColorStop(.12,'rgba(30,30,30,.5)');g.addColorStop(.9,'rgba(40,40,40,.35)');g.addColorStop(.97,'rgba(200,40,30,.5)');g.addColorStop(1,'rgba(0,0,0,0)');c.fillStyle=g;c.fillRect(0,0,512,512)});
+
+/* ---------- terrain ---------- */
+const hash=(x,y)=>{const h=Math.sin(x*127.1+y*311.7)*43758.5453;return h-Math.floor(h)};
+function vn(x,y){const xi=Math.floor(x),yi=Math.floor(y),xf=x-xi,yf=y-yi,u=xf*xf*(3-2*xf),v=yf*yf*(3-2*yf);
+ const a=hash(xi,yi),b=hash(xi+1,yi),c=hash(xi,yi+1),d=hash(xi+1,yi+1);return a+(b-a)*u+(c-a)*v+(a-b-c+d)*u*v}
+const fbm=(x,y,o=6)=>{let s=0,a=.5,f=1;for(let i=0;i<o;i++){s+=a*vn(x*f,y*f);a*=.5;f*=2.03}return s};
+function groundH(x,z){const d=Math.hypot(x,z),k=sstep(420,1000,d);if(k<=0)return 0;
+ return k*((fbm(x*.0018+3,z*.0018+7)-.48)*110+Math.pow(fbm(x*.0006+9,z*.0006),2.2)*420)}
+{const TS=9000,TN=420,g=new THREE.PlaneGeometry(TS,TS,TN,TN);g.rotateX(-PI/2);const p=g.attributes.position;
+ for(let i=0;i<p.count;i++)p.setY(i,groundH(p.getX(i),p.getZ(i)));g.computeVertexNormals();
+ const n=g.attributes.normal,col=[],c=new THREE.Color();
+ for(let i=0;i<p.count;i++){const x=p.getX(i),y=p.getY(i),z=p.getZ(i),sl=1-n.getY(i),m=fbm(x*.01,z*.01,3);
+  c.setRGB(.16+.12*m,.24+.1*m,.08+.04*m);c.lerp(new THREE.Color(.36,.33,.2),sstep(.4,.7,fbm(x*.003,z*.003,3)));
+  c.lerp(new THREE.Color(.33,.31,.29),sstep(.12,.3,sl));c.lerp(new THREE.Color(.92,.93,.96),sstep(230,300,y+m*40)*sstep(.4,.2,sl));col.push(c.r,c.g,c.b)}
+ g.setAttribute('color',new THREE.Float32BufferAttribute(col,3));
+ const t=new THREE.Mesh(g,new THREE.MeshStandardMaterial({vertexColors:true,map:grassTex,roughness:.97}));t.receiveShadow=true;scene.add(t)}
+const flat=(w,d,tex,x,y,z,rep)=>{const m=new THREE.Mesh(new THREE.PlaneGeometry(w,d),new THREE.MeshStandardMaterial({map:tex,roughness:.9}));m.rotation.x=-PI/2;m.position.set(x,y,z);m.receiveShadow=true;scene.add(m);return m};
+flat(90,90,concTex,0,.01,0);flat(26,26,padTex,0,.02,0);
+{const r=flat(30,620,rwyTex,0,.015,-170);r.rotation.z=PI/2}
+// trees (instanced)
+{const fol=[];for(let k=0;k<3;k++){const g=new THREE.ConeGeometry(2.6-k*.6,4.2,14,3);g.translate(0,3.2+k*2.1,0);fol.push(g)}
+ const merge=gs=>{let P=[],I=[],o=0;for(const g of gs){const gi=g.index?g:g;const pa=g.attributes.position.array;for(let i=0;i<pa.length;i+=3)P.push(pa[i]+(Math.random()-.5)*.35,pa[i+1]+(Math.random()-.5)*.3,pa[i+2]+(Math.random()-.5)*.35);for(const ix of g.index.array)I.push(ix+o);o+=pa.length/3}
+  const r=new THREE.BufferGeometry();r.setAttribute('position',new THREE.Float32BufferAttribute(P,3));r.setIndex(I);r.computeVertexNormals();return r};
+ const fg=merge(fol),tg=new THREE.CylinderGeometry(.18,.28,2.4,8);tg.translate(0,1.2,0);const N=5200;
+ const fm=new THREE.InstancedMesh(fg,new THREE.MeshStandardMaterial({color:0xffffff,roughness:.9}),N),tm=new THREE.InstancedMesh(tg,new THREE.MeshStandardMaterial({color:0x4a3626,roughness:1}),N);
+ const o=new THREE.Object3D(),c=new THREE.Color();let i=0;
+ for(let a=0;a<40000&&i<N;a++){const r=430+Math.pow(Math.random(),.7)*3200,th=Math.random()*2*PI,x=Math.cos(th)*r,z=Math.sin(th)*r;
+  if(fbm(x*.004,z*.004,3)<.47)continue;const y=groundH(x,z);if(y>230||Math.abs(groundH(x+4,z)-y)>2.6)continue;
+  o.position.set(x,y-.2,z);o.rotation.y=Math.random()*6;o.scale.setScalar(.7+Math.random()*.9);o.updateMatrix();fm.setMatrixAt(i,o.matrix);tm.setMatrixAt(i,o.matrix);
+  c.setHSL(.27+Math.random()*.06,.45,.13+Math.random()*.08);fm.setColorAt(i,c);i++}
+ fm.count=tm.count=i;fm.castShadow=true;fm.receiveShadow=true;scene.add(fm,tm)}
+// clouds
+{const ct=ctex(256,256,(c)=>{for(let i=0;i<26;i++){const x=60+Math.random()*136,y=90+Math.random()*70,r=25+Math.random()*45,g=c.createRadialGradient(x,y,0,x,y,r);g.addColorStop(0,'rgba(255,255,255,.55)');g.addColorStop(1,'rgba(255,255,255,0)');c.fillStyle=g;c.fillRect(0,0,256,256)}});
+ for(let i=0;i<70;i++){const s=new THREE.Sprite(new THREE.SpriteMaterial({map:ct,depthWrite:false,opacity:.9}));const a=Math.random()*6.28,r=900+Math.random()*4000;s.position.set(Math.cos(a)*r,700+Math.random()*500,Math.sin(a)*r);s.scale.set(700+Math.random()*600,350,1);scene.add(s)}}
+// hangar, building, windsock
+const STD=(c,r=.8,m=0)=>new THREE.MeshStandardMaterial({color:c,roughness:r,metalness:m});
+function box(w,h,d,mat,x,y,z,p=scene){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat);m.position.set(x,y,z);m.castShadow=m.receiveShadow=true;p.add(m);return m}
+{box(30,7,22,STD(0xb8bcc0,.6,.3),-48,3.5,40);const roof=new THREE.Mesh(new THREE.CylinderGeometry(11.5,11.5,30,48,1,false,0,PI),STD(0x8d9399,.5,.6));roof.rotation.z=PI/2;roof.position.set(-48,7,40);roof.castShadow=true;scene.add(roof);
+ box(26,6.4,.2,STD(0x3a4048,.5,.4),-48,3.2,28.9);box(10,4,8,STD(0xe6e2d8),40,2,45);box(10.4,.3,8.4,STD(0x7a3a2a),40,4.1,45)}
+const sock=new THREE.Group();sock.position.set(24,0,-16);scene.add(sock);
+{const pole=new THREE.Mesh(new THREE.CylinderGeometry(.05,.07,6,12),STD(0xdddddd,.4,.6));pole.position.y=3;pole.castShadow=true;sock.add(pole)}
+const sockArm=new THREE.Group();sockArm.position.y=6;sock.add(sockArm);
+{const g=new THREE.CylinderGeometry(.35,.14,3,24,6,true);g.rotateX(PI/2);g.translate(0,0,1.5);const m=new THREE.Mesh(g,new THREE.MeshStandardMaterial({map:sockTex,side:THREE.DoubleSide,roughness:.8}));m.castShadow=true;sockArm.add(m)}
+
+/* ---------- helicopter model ---------- */
+const M={paint:new THREE.MeshPhysicalMaterial({map:paintTex,roughness:.32,clearcoat:1,clearcoatRoughness:.06}),
+ inner:new THREE.MeshStandardMaterial({color:0x5b5e63,roughness:.9,side:THREE.BackSide}),hide:new THREE.MeshBasicMaterial({visible:false}),
+ glass:new THREE.MeshPhysicalMaterial({color:0xa9c0cc,transparent:true,opacity:.14,roughness:.03,clearcoat:1,side:THREE.DoubleSide,depthWrite:false,envMapIntensity:2.2}),
+ chrome:STD(0xe0e0e0,.15,1),steel:STD(0x8a8f96,.35,.85),dark:STD(0x1c1e21,.55,.3),black:STD(0x0c0c0d,.4,.2),eng:STD(0x50555c,.45,.7),
+ blade:new THREE.MeshStandardMaterial({vertexColors:true,roughness:.35,metalness:.4}),seat:STD(0x5a4330,.85),red:STD(0xb01818,.4,.2),gold:STD(0xb08a3a,.35,.8)};
+const heli=new THREE.Group(),model=new THREE.Group();model.position.y=-1.15;heli.add(model);scene.add(heli);
+function mk(g,m,x=0,y=0,z=0,p=model){const o=new THREE.Mesh(g,m);o.position.set(x,y,z);o.castShadow=o.receiveShadow=true;p.add(o);return o}
+function cr(K,z,k){let i=0;while(i<K.length-2&&z>K[i+1][0])i++;const p=j=>K[clamp(j,0,K.length-1)],z0=p(i)[0],h=p(i+1)[0]-z0,t=clamp((z-z0)/h,0,1);
+ const m=j=>{const a=p(j-1),b=p(j+1);return(b[k]-a[k])/((b[0]-a[0])||1)*h},y0=p(i)[k],y1=p(i+1)[k],m0=m(i),m1=m(i+1),t2=t*t,t3=t2*t;
+ return(2*t3-3*t2+1)*y0+(t3-2*t2+t)*m0+(-2*t3+3*t2)*y1+(t3-t2)*m1}
+function loft(K,N,Mn,o={}){const nx=o.nx||2.6,nt=o.nt||2.2,nb=o.nb||3.2,cf=o.cf??.42,z0=K[0][0],z1=K[K.length-1][0],P=[],UV=[],G=[[],[]],zs=[];
+ for(let i=0;i<=N;i++){const t=i/N,z=z0+(z1-z0)*(.5-.5*Math.cos(PI*t));zs.push(z);const hw=Math.max(cr(K,z,1),.002),yt=cr(K,z,2),yb=cr(K,z,3),yc=yb+cf*(yt-yb);
+  for(let j=0;j<=Mn;j++){const th=j/Mn*2*PI,c=Math.cos(th),s=Math.sin(th);
+   P.push(hw*Math.sign(c)*Math.pow(Math.abs(c),2/nx),s>=0?yc+(yt-yc)*Math.pow(s,2/nt):yc-(yc-yb)*Math.pow(-s,2/nb),z);UV.push(t,j/Mn)}}
+ for(let i=0;i<N;i++)for(let j=0;j<Mn;j++){const a=i*(Mn+1)+j,b=a+Mn+1,g=o.mask?o.mask((zs[i]+zs[i+1])/2,(j+.5)/Mn*2*PI):0;G[g].push(a,a+1,b,b,a+1,b+1)}
+ const geo=new THREE.BufferGeometry();geo.setAttribute('position',new THREE.Float32BufferAttribute(P,3));geo.setAttribute('uv',new THREE.Float32BufferAttribute(UV,2));
+ geo.setIndex([...G[0],...G[1]]);geo.addGroup(0,G[0].length,0);geo.addGroup(G[0].length,G[1].length,1);geo.computeVertexNormals();return geo}
+// cabin
+const cabK=[[-2.38,.01,1.02,.99],[-2.3,.30,1.22,.78],[-2.1,.50,1.45,.62],[-1.8,.60,1.66,.54],[-1.4,.65,1.84,.50],[-.9,.66,1.95,.49],[-.4,.65,1.98,.50],[0,.58,1.96,.56],[.15,.42,1.90,.70],[.24,.02,1.75,.95]];
+const cabMask=(z,th)=>{const s=Math.sin(th),c=Math.cos(th);
+ if(z<-1.2&&z>-2.34&&s>-.42&&Math.abs(th-PI/2)>.02)return 1;
+ if(Math.abs(c)>.42&&s>-.05&&s<.8&&((z>-1.12&&z<-.30)||(z>-.24&&z<.02)))return 1;return 0};
+const cab=loft(cabK,180,128,{mask:cabMask});
+mk(cab,[M.paint,M.hide]);{const g=mk(cab,[M.hide,M.glass]);g.castShadow=false;mk(cab,[M.inner,M.hide]).castShadow=false}
+// mast fairing / upper cowl, tailcone
+mk(loft([[-.6,.02,1.97,1.9],[-.35,.30,2.2,1.86],[0,.36,2.3,1.82],[.5,.38,2.2,1.38],[1.0,.33,1.95,1.25],[1.5,.27,1.72,1.16]],90,72,{nx:2.4,nt:2.4,nb:2.4,cf:.3}),M.paint);
+mk(loft([[1.25,.30,1.74,1.10],[6.5,.085,1.71,1.54]],120,48,{nx:2,nt:2,nb:2,cf:.5}),M.paint);
+// engine (O-540 flat six)
+{const e=new THREE.Group();e.position.set(0,.98,.66);model.add(e);mk(new RB(.34,.26,.78,4,.04),M.eng,0,0,0,e);
+ const pr=[new THREE.Vector2(.062,0)];for(let f=0;f<12;f++){const y=.012+f*.016;pr.push(new THREE.Vector2(.062,y),new THREE.Vector2(.092,y+.002),new THREE.Vector2(.092,y+.007),new THREE.Vector2(.062,y+.009))}pr.push(new THREE.Vector2(.06,.21));
+ const cyl=new THREE.LatheGeometry(pr,28);
+ for(const sd of[-1,1])for(let k=0;k<3;k++){const z=-.24+k*.22+sd*.05,c=mk(cyl,M.eng,sd*.16,.02,z,e);c.rotation.z=-sd*PI/2;
+  mk(new RB(.1,.13,.12,2,.02),M.eng,sd*.42,.02,z,e);
+  const ex=new THREE.CatmullRomCurve3([new V(sd*.42,-.06,z),new V(sd*.4,-.2,z+.05),new V(sd*.3,-.28,.32),new V(sd*.2,-.3,.6)]);mk(new THREE.TubeGeometry(ex,24,.022,10),M.gold,0,0,0,e)}
+ mk(new THREE.CylinderGeometry(.34,.34,.18,48).rotateX(PI/2),M.dark,0,.05,-.48,e);
+ const sh=new THREE.LatheGeometry([0,1,2,3,4].flatMap(i=>[new THREE.Vector2(.13,i*.02),new THREE.Vector2(.11,i*.02+.01)]),40);sh.rotateX(PI/2);
+ mk(sh,M.steel,0,.0,-.62,e);mk(sh,M.steel,0,.62,-.62,e);for(let b=0;b<4;b++)mk(new THREE.BoxGeometry(.012,.62,.02),M.black,.122,.31,-.6-b*.018,e),mk(new THREE.BoxGeometry(.012,.62,.02),M.black,-.122,.31,-.6-b*.018,e);
+ mk(new THREE.CylinderGeometry(.03,.03,.25,12),M.steel,.2,.45,-.62,e)}
+// mast, swashplate, hub
+mk(new THREE.CylinderGeometry(.055,.068,1.62,32),M.chrome,0,2.32,0);
+const swash=new THREE.Group();swash.position.set(0,2.42,0);model.add(swash);mk(new THREE.CylinderGeometry(.16,.16,.035,40),M.steel,0,0,0,swash);mk(new THREE.CylinderGeometry(.14,.15,.03,40),M.chrome,0,.035,0,swash);
+for(let i=0;i<3;i++){const a=i*2.09;mk(new THREE.CylinderGeometry(.008,.008,.35,8),M.steel,Math.cos(a)*.13,2.24,Math.sin(a)*.13)}
+const rTilt=new THREE.Group();rTilt.position.set(0,3.12,0);model.add(rTilt);const rSpin=new THREE.Group();rTilt.add(rSpin);
+mk(new RB(.2,.13,.16,3,.025),M.steel,0,0,0,rSpin);mk(new THREE.CylinderGeometry(.04,.04,.9,20).rotateZ(PI/2),M.chrome,0,0,0,rSpin);
+mk(new THREE.CylinderGeometry(.03,.03,.24,16).rotateX(PI/2),M.steel,0,0,0,rSpin);
+for(const s of[-1,1])mk(new THREE.CylinderGeometry(.007,.007,.62,8),M.steel,s*.16,-.36,s*.07,rSpin);
+function bladeGeo(r0,r1,c,tk,ns,nc,tip,tw){const P=[],Cl=[],I=[],naca=x=>5*tk*(.2969*Math.sqrt(x)-.126*x-.3516*x*x+.2843*x**3-.1036*x**4);
+ for(let i=0;i<=ns;i++){const s=i/ns,r=r0+(r1-r0)*s,a=tw*(s-.7),ca=Math.cos(a),sa=Math.sin(a);
+  const col=tip&&s>.93?(Math.floor((s-.93)/.0234)%2?[.8,.08,.06]:[.92,.92,.92]):[.2,.21,.23];
+  for(let j=0;j<nc;j++){const ph=j/nc*2*PI,x=(1+Math.cos(ph))/2,y=Math.sign(Math.sin(ph))*naca(x)*c,z=(x-.25)*c;P.push(r,y*ca-z*sa,y*sa+z*ca);Cl.push(...col)}}
+ for(let i=0;i<ns;i++)for(let j=0;j<nc;j++){const a=i*nc+j,b=a+nc,a1=i*nc+(j+1)%nc,b1=a1+nc;I.push(a,b,a1,b,b1,a1)}
+ const c0=P.length/3;P.push(r0,0,0,r1,0,0);Cl.push(.2,.2,.2,.2,.2,.2);
+ for(let j=0;j<nc;j++){const j1=(j+1)%nc;I.push(c0,j,j1,c0+1,ns*nc+j1,ns*nc+j)}
+ const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(P,3));g.setAttribute('color',new THREE.Float32BufferAttribute(Cl,3));g.setIndex(I);g.computeVertexNormals();return g}
+const bg1=bladeGeo(.42,5.03,.254,.12,90,48,true,-.14),blades=[];
+for(let k=0;k<2;k++){const az=new THREE.Group();az.rotation.y=k*PI;rSpin.add(az);const cone=new THREE.Group();az.add(cone);const pit=new THREE.Group();cone.add(pit);
+ mk(bg1,M.blade,0,0,0,pit);mk(new RB(.32,.05,.16,2,.015),M.steel,.5,0,0,pit);mk(new THREE.BoxGeometry(.08,.015,.12),M.steel,.25,-.03,-.08,pit);blades.push({cone,pit})}
+const blur=new THREE.Mesh(new THREE.CircleGeometry(5.03,96).rotateX(-PI/2),new THREE.MeshBasicMaterial({map:blurTex,transparent:true,opacity:0,depthWrite:false,side:THREE.DoubleSide}));rTilt.add(blur);
+// tail: fins, stabiliser, gearbox, tail rotor
+const ext=(pts,d)=>{const s=new THREE.Shape(pts.map(p=>new THREE.Vector2(...p)));const g=new THREE.ExtrudeGeometry(s,{depth:d,bevelEnabled:true,bevelThickness:.01,bevelSize:.01,bevelSegments:4,curveSegments:8});g.translate(0,0,-d/2);g.rotateY(-PI/2);return g};
+mk(ext([[0,.04],[.42,0],[.66,.84],[.44,.88]],.03),M.paint,0,1.6,5.9);mk(ext([[.06,-.02],[.42,-.02],[.52,-.66],[.32,-.7]],.03),M.paint,0,1.6,5.9);
+{const naca=x=>.6*(.2969*Math.sqrt(x)-.126*x-.3516*x*x+.2843*x**3-.1036*x**4),pts=[];for(let i=0;i<=24;i++){const x=1-i/24;pts.push([x*.34,naca(x)*.34])}for(let i=1;i<24;i++){const x=i/24;pts.push([x*.34,-naca(x)*.34])}
+ mk(ext(pts,1.25),M.paint,0,1.48,5.55)}
+mk(new THREE.SphereGeometry(.1,24,16).scale(1,1,1.4),M.paint,-.03,1.64,6.38);mk(new THREE.CylinderGeometry(.025,.025,.22,12).rotateZ(PI/2),M.steel,-.14,1.70,6.38);
+mk(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new V(0,.95,6.05),new V(0,.82,6.3),new V(0,.9,6.62)]),20,.02,8),M.steel);
+const trHub=new THREE.Group();trHub.position.set(-.26,1.70,6.38);model.add(trHub);const trSpin=new THREE.Group();trHub.add(trSpin);
+{const tg=bladeGeo(.07,.735,.1,.12,24,24,true,-.1);for(const s of[1,-1]){const b=mk(tg,M.blade,0,0,0,trSpin);b.rotation.z=s*PI/2}mk(new THREE.CylinderGeometry(.05,.05,.07,20).rotateZ(PI/2),M.steel,0,0,0,trSpin)}
+// skids
+for(const x of[-1.1,1.1]){mk(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([new V(x,.3,-2.0),new V(x,.14,-1.86),new V(x,.055,-1.6),new V(x,.05,-1),new V(x,.05,.4),new V(x,.05,1.2),new V(x,.08,1.33)]),120,.042,16),M.steel);
+ mk(new THREE.BoxGeometry(.04,.015,2.3),M.dark,x,.01,-.2)}
+for(const z of[-1.05,.55]){mk(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([[-1.1,.05],[-1.08,.3],[-.95,.55],[-.55,.62],[0,.63],[.55,.62],[.95,.55],[1.08,.3],[1.1,.05]].map(p=>new V(p[0],p[1],z))),80,.04,14),M.steel)}
+for(const x of[-.78,.78])mk(new THREE.BoxGeometry(.32,.025,.16),M.dark,x,.6,-1.05);
+// lights
+const lt=(c,x,y,z)=>{const m=new THREE.Mesh(new THREE.SphereGeometry(.035,12,8),new THREE.MeshBasicMaterial({color:c}));m.position.set(x,y,z);model.add(m);return m};
+const navL=[lt(0xff2020,-.66,1.2,-.9),lt(0x20ff40,.66,1.2,-.9),lt(0xffffff,0,1.62,6.55)],strobeL=lt(0xff1010,0,2.52,6.4);
+const ldg=new THREE.SpotLight(0xfff4e0,0,250,.35,.5,1.2);ldg.position.set(0,.75,-2.2);ldg.target.position.set(0,-2,-12);model.add(ldg,ldg.target);
+mk(new THREE.CylinderGeometry(.006,.006,.6,6),M.black,0,2.05,.7).rotation.x=-.6;
+
+/* ---------- cockpit ---------- */
+mk(new THREE.BoxGeometry(1.15,.04,1.9),M.dark,0,.56,-.95).castShadow=false;
+for(const x of[-.33,.33]){mk(new RB(.48,.12,.46,3,.04),M.seat,x,.74,-.48);const b=mk(new RB(.48,.62,.12,3,.04),M.seat,x,1.08,-.2);b.rotation.x=-.12}
+mk(new RB(.34,.42,.6,3,.05),M.dark,0,.78,-.7);
+const hits=[],HM=new THREE.MeshBasicMaterial({color:0xffd166,transparent:true,opacity:0,depthTest:false,depthWrite:false});
+function hit(id,geo,x,y,z,p){const m=new THREE.Mesh(geo,HM.clone());m.position.set(x,y,z);m.userData.id=id;m.renderOrder=9;p.add(m);hits.push(m);return m}
+// cyclic T-bar
+const cyc=new THREE.Group();cyc.position.set(0,.6,-.98);model.add(cyc);
+mk(new THREE.CylinderGeometry(.022,.028,.44,16),M.black,0,.22,0,cyc);mk(new THREE.CylinderGeometry(.018,.018,.62,16).rotateZ(PI/2),M.black,.03,.44,0,cyc);
+for(const x of[-.27,.33]){mk(new THREE.CylinderGeometry(.022,.02,.13,16),M.black,x,.5,0,cyc)}hit('cyc',new THREE.BoxGeometry(.12,.2,.12),.33,.48,0,cyc);
+// collective + twist grip
+const col=new THREE.Group();col.position.set(.08,.66,-.18);model.add(col);
+mk(new THREE.CylinderGeometry(.018,.022,.6,16).rotateX(PI/2),M.black,0,0,-.3,col);
+const grip=new THREE.Group();grip.position.set(0,0,-.62);col.add(grip);mk(new THREE.CylinderGeometry(.026,.026,.13,20).rotateX(PI/2),M.dark,0,0,0,grip);mk(new THREE.BoxGeometry(.012,.02,.13),M.red,0,.026,0,grip);
+hit('coll',new THREE.BoxGeometry(.08,.08,.36),0,0,-.32,col);hit('twist',new THREE.BoxGeometry(.08,.08,.14),0,0,-.62,col);
+// pedals
+const peds=[];for(const x of[.24,.43]){const p=mk(new RB(.08,.12,.03,2,.01),M.dark,x,.66,-1.5);p.rotation.x=-.5;peds.push(p)}
+hit('ped',new THREE.BoxGeometry(.3,.15,.1),.335,.66,-1.5,model);
+// instrument panel
+const PW=.8,PH=.42,PS=1400,CW=PW*PS,CH=PH*PS;
+const pc=document.createElement('canvas');pc.width=CW;pc.height=CH;const px=pc.getContext('2d');
+const bgc=document.createElement('canvas');bgc.width=CW;bgc.height=CH;const bx=bgc.getContext('2d');
+const panTex=new THREE.CanvasTexture(pc);panTex.colorSpace=THREE.SRGBColorSpace;panTex.anisotropy=8;
+const panel=new THREE.Group();panel.position.set(0,1.2,-1.42);panel.rotation.x=-.27;model.add(panel);
+mk(new THREE.PlaneGeometry(PW,PH),new THREE.MeshStandardMaterial({map:panTex,emissiveMap:panTex,emissive:0xffffff,emissiveIntensity:.32,roughness:.75}),0,0,0,panel);
+mk(new THREE.BoxGeometry(PW+.04,PH+.04,.2),M.dark,0,0,-.101,panel);{const gs=mk(new RB(PW+.08,.03,.2,3,.012),M.black,0,PH/2+.02,.04,panel);gs.rotation.x=.12}
+const ped=new THREE.Group();ped.position.set(0,.8,-1.36);ped.rotation.x=-.5;model.add(ped);
+const pdc=document.createElement('canvas');pdc.width=420;pdc.height=560;const pdx=pdc.getContext('2d');const pdTex=new THREE.CanvasTexture(pdc);pdTex.colorSpace=THREE.SRGBColorSpace;
+mk(new THREE.PlaneGeometry(.3,.4),new THREE.MeshStandardMaterial({map:pdTex,emissiveMap:pdTex,emissive:0xffffff,emissiveIntensity:.3,roughness:.8}),0,0,.001,ped);mk(new THREE.BoxGeometry(.32,.42,.3),M.dark,0,0,-.15,ped);
+
+/* ---------- state ---------- */
+const Om0=42.7,R=5.03,AR=PI*R*R,SIG=.032,CLA=5.7,CD0=.0095,MASS=1000,Ix=1900,Iy=2300,Iz=800,QMAX=4500,IE=20,IR=550;
+const HUB=new V(0,1.97,0),TRP=new V(-.26,.55,6.38),TAIL=new V(0,.45,6.0);
+const F={p:new V(),v:new V(),q:new THREE.Quaternion(),w:new V(),Om:0,We:0,li:.03,a1:0,b1:0,T:0,vrs:0,crashed:false};
+const S={},C={cx:0,cy:0,tx:0,ty:0,coll:0,ped:0};let wind=new V(),windSpd=4,paused=false,ht=0;
+const CPTS=[[1.1,-1.1,-1.4],[-1.1,-1.1,-1.4],[1.1,-1.1,1.15],[-1.1,-1.1,1.15],[0,-.33,6.62]].map(a=>({r:new V(...a),anc:null}));
+function reset(){F.p.set(0,1.13,0);F.v.set(0,0,0);F.q.set(0,0,0,1);F.w.set(0,0,0);Object.assign(F,{Om:0,We:0,li:.03,a1:0,b1:0,crashed:false});
+ Object.assign(S,{batt:false,alt:false,avion:false,gov:false,strobe:false,nav:false,ldg:false,clutch:false,clutchE:0,key:0,mix:false,carb:0,fuelV:false,rbrake:true,
+  twist:0,running:false,fuelM:24,fuelA:14,oilT:59,oilP:0,cht:59,ice:0,batQ:1,gi:0,thr:0,frac:0,carbT:15,amps:0,starter:false,cm:false,elec:false,low:false});
+ Object.assign(C,{cx:0,cy:0,tx:0,ty:0,coll:0,ped:0});CPTS.forEach(c=>c.anc=null);$('msg').style.display='none';setLesson($('les').value);drawPed()}
+function quick(){reset();Object.assign(S,{batt:true,alt:true,avion:true,gov:true,strobe:true,nav:true,clutch:true,clutchE:1,key:3,mix:true,fuelV:true,rbrake:false,twist:.25,running:true,oilT:180,oilP:80,cht:330});
+ F.Om=F.We=1.02*Om0;C.ped=-.15;drawPed()}
+function crash(t){if(F.crashed)return;F.crashed=true;const m=$('msg');m.innerHTML='💥 '+t+'<br><small style="font-size:15px">Backspace to reset</small>';m.style.display='block'}
+
+/* ---------- physics ---------- */
+function step(dt){
+ const q=F.q,qi=q.clone().invert(),rho=1.225*Math.exp(-Math.max(0,F.p.y)/9000),dr=rho/1.225,h5=.5*rho;
+ const vb=F.v.clone().sub(wind).applyQuaternion(qi),Om=F.Om,r=Om/Om0,OR=Math.max(Om*R,5),u=-vb.z,mu=Math.hypot(vb.x,vb.z)/OR,kl=Om>5?2/Om:0;
+ const tA=C.cy*.17-clamp(u/OR,-.5,.5)*.25+kl*F.w.x,tB=C.cx*.13-clamp(vb.x/OR,-.5,.5)*.25+kl*F.w.z,k=Math.min(1,dt/.07);
+ F.a1+=(tA-F.a1)*k;F.b1+=(tB-F.b1)*k;
+ const n=new V(Math.sin(F.b1),Math.cos(F.a1)*Math.cos(F.b1),-Math.sin(F.a1)),lc=vb.dot(n)/OR,th=.012+C.coll*.22;
+ let li=F.li,CT=0;for(let i=0;i<3;i++){const lam=lc+li;CT=SIG*CLA/2*(th*(1/3+mu*mu/2)-lam/2);li+=(Math.max(CT,0)/(2*Math.max(Math.hypot(mu,lam),.015))-li)*.5}F.li=li;
+ const dsc=-lc/.033;F.vrs=r>.5&&mu<.08?Math.max(0,1-Math.abs(dsc-.95)/.6)*(1-mu/.08):0;
+ const hw=HUB.clone().applyQuaternion(q).add(F.p),hA=hw.y-groundH(hw.x,hw.z);let ge=1;
+ if(hA<R*1.5){ge=Math.min(1.35,1/(1-Math.pow(R/(4*Math.max(hA,1.5)),2)));ge=1+(ge-1)*Math.max(0,1-mu/.12)}
+ const T=CT*(1-.4*F.vrs)*ge*sstep(.6,.8,r)*rho*AR*Om*Om*R*R;
+ const Qr=(CT*(lc+li)+SIG*CD0/8*(1+4.6*mu*mu))*rho*AR*Om*Om*R*R*R;
+ const tvx=vb.x+F.w.y*TRP.z-F.w.z*TRP.y,Ttr=(1500*(.12-.88*C.ped)-45*tvx)*r*r*dr;
+ const Qtr=Om>1?(Math.abs(Ttr)*Math.sqrt(Math.abs(Ttr)/(2*rho*1.7))/.75+2500*r*r*r)/Om:0;
+ // engine & drive
+ const re=F.We/Om0,mags=S.key===0?0:S.key>=3?1:.96;S.elec=S.batt&&S.batQ>.03;
+ let thr=S.twist+.4*C.coll;const gv=S.gov&&S.elec&&re>.8&&re<1.2;
+ if(gv){const e=1.02-re;S.gi=clamp(S.gi+e*2*dt,-1,1);thr+=S.gi+e*10}else S.gi*=1-dt;S.thr=thr=clamp(thr,0,1);
+ S.carbT=11-12*(1-thr)*clamp(re/.6,0,1)+S.carb*32*clamp(re/.5,0,1);
+ if(S.running){if(S.carbT>-15&&S.carbT<5)S.ice=Math.min(.6,S.ice+dt*.0005);else if(S.carbT>=5)S.ice=Math.max(0,S.ice-dt*.03)}
+ const fuelOK=S.fuelV&&S.mix&&S.fuelM>0;
+ if(S.running&&(!fuelOK||!mags||re<.05||S.ice>.55))S.running=false;
+ if(!S.running&&fuelOK&&mags&&re>.08&&thr<.6)S.running=true;
+ S.starter=S.key===4&&S.elec;const Qs=S.starter?Math.max(0,800*(1-re/.14)):0;
+ S.frac=S.running?Math.max(0,(.03+.97*Math.pow(thr,1.5))*mags*(1-S.ice)*(1-.07*S.carb)*Math.min(1,dr*1.02)-.05*re)*clamp(re*2.5,0,1):0;
+ const Qn=QMAX*S.frac+Qs-(F.We>.01?30+320*re*re+(S.running?0:220):0),Ql=Qr+Qtr+(Om>.01?30+(S.rbrake?1200:0):0);
+ const tgt=S.clutch?1:0;S.cm=false;if(S.elec&&S.clutchE!==tgt){S.clutchE=clamp(S.clutchE+Math.sign(tgt-S.clutchE)*dt/9,0,1);S.cm=true}
+ let Qd=0;
+ if(S.clutchE>=1&&F.We>=F.Om-.3&&F.We<=F.Om+.6){const aE=Qn/IE,aR=-Ql/IR,aC=(Qn-Ql)/(IE+IR);if(aR>aE){F.We+=aE*dt;F.Om+=aR*dt}else{F.Om+=aC*dt;F.We=F.Om;Qd=Ql+IR*aC}}
+ else{const e=S.clutchE;Qd=clamp(e*e*3000*(F.We-F.Om),0,Math.min(e*e*1500,Math.max(0,Qn*.9+(F.We-.35*Om0)*60)));F.We+=(Qn-Qd)/IE*dt;F.Om+=(Qd-Ql)/IR*dt}
+ F.We=Math.max(0,F.We);F.Om=Math.max(0,F.Om);
+ const ap=(x,t,kk)=>x+(t-x)*Math.min(1,kk*dt);
+ if(S.running){S.fuelM=Math.max(0,S.fuelM-(2.5+16*S.frac*re)/3600*dt);if(S.fuelA>0&&S.fuelM<29){const t=Math.min(S.fuelA,dt*.004);S.fuelA-=t;S.fuelM+=t}}
+ S.oilP=ap(S.oilP,S.running?clamp(18+75*re,0,92):0,1.5);S.oilT=ap(S.oilT,S.running?110+90*re*(.5+.5*S.frac):59,.012);S.cht=ap(S.cht,S.running?220+260*S.frac*re+40*re:59,.05);
+ const chg=S.alt&&S.running&&re>.5&&S.batt,load=(S.elec?2+(S.avion?6:0)+(S.ldg?8:0)+(S.nav?3:0)+(S.strobe?2:0)+(S.cm?10:0):0)+(S.starter?150:0);
+ S.amps=chg?Math.min(60,(1-S.batQ)*300+3):-load;S.batQ=clamp(S.batQ+(chg?(1-S.batQ)*.01:-load*1.5e-5)*dt,0,1);
+ // forces (body)
+ const f=n.clone().multiplyScalar(T),m=new V().crossVectors(HUB,f);f.x+=Ttr;
+ f.x-=h5*5.5*vb.x*Math.abs(vb.x);f.y-=h5*6*vb.y*Math.abs(vb.y);f.z-=h5*1.1*vb.z*Math.abs(vb.z);
+ m.add(new V().crossVectors(TRP,new V(Ttr,0,0)));m.y-=Qd;
+ const vt=new V().crossVectors(F.w,TAIL).add(vb),sp=Math.abs(u)+2,fin=new V(-h5*1.6*sp*vt.x,-h5*1.5*sp*vt.y,0);f.add(fin);m.add(new V().crossVectors(TAIL,fin));
+ const sas=S.sas?1:0;m.x-=F.w.x*(700+3500*sas);m.y-=F.w.y*(700+3200*sas);m.z-=F.w.z*(400+2500*sas);
+ // ground contact
+ const Fw=f.applyQuaternion(q);let touch=false;
+ for(let i=0;i<CPTS.length;i++){const c=CPTS[i],pw=c.r.clone().applyQuaternion(q).add(F.p),pen=groundH(pw.x,pw.z)-pw.y;if(pen<=0){c.anc=null;continue}touch=true;
+  const vp=new V().crossVectors(F.w,c.r).applyQuaternion(q).add(F.v);const fn=Math.max(0,8e4*pen-8e3*vp.y);if(!c.anc)c.anc=pw.clone();
+  let fx=-3e4*(pw.x-c.anc.x)-3e3*vp.x,fz=-3e4*(pw.z-c.anc.z)-3e3*vp.z;const ft=Math.hypot(fx,fz),lim=.55*fn;if(ft>lim){fx*=lim/ft;fz*=lim/ft;c.anc.copy(pw)}
+  const fc=new V(fx,fn,fz);Fw.add(fc);m.add(new V().crossVectors(c.r,fc.clone().applyQuaternion(qi)));
+  if(vp.y<(i<4?-3.6:-2.2))crash(i<4?`Hard landing (${Math.round(-vp.y*197)} ft/min)`:'Tail rotor / stinger strike');
+  if(Math.hypot(vp.x,vp.z)>13)crash('Skids caught the ground at speed — rollover')}
+ if(touch){const e=new THREE.Euler().setFromQuaternion(q,'YXZ');if(Math.abs(e.z)>.55||e.x<-.5||e.x>.6)crash('Dynamic rollover — blades struck the ground')}
+ const agl=F.p.y-groundH(F.p.x,F.p.z)-1.12;
+ if(agl>2&&T<.15*MASS*9.81&&r>.8&&Math.abs(F.w.z)>.7)crash('Mast bumping (low-G + roll)');
+ Fw.y-=MASS*9.81;F.v.addScaledVector(Fw,dt/MASS);F.p.addScaledVector(F.v,dt);
+ F.w.x+=m.x/Ix*dt;F.w.y+=m.y/Iy*dt;F.w.z+=m.z/Iz*dt;F.q.multiply(new THREE.Quaternion(F.w.x*dt/2,F.w.y*dt/2,F.w.z*dt/2,1)).normalize();
+ Object.assign(F,{T,Qd,Ttr,mu,agl,touch,th});S.low=S.elec&&r<.97&&C.coll>.03}
+
+/* ---------- controls catalogue ---------- */
+const OO=b=>b?'ON':'OFF';
+const CTRL={
+ batt:{n:'BATTERY (master) switch',d:'Connects the battery to the electrical bus. Powers the tachometers, engine gauges, warning lights, starter, clutch actuator and governor. R44 tachs are electric — with the battery off they read zero even with the rotor turning.',g:()=>OO(S.batt),a:()=>S.batt=!S.batt},
+ alt:{n:'ALTERNATOR switch',d:'Connects the engine-driven alternator. Turn ON after start; the ALT light goes out once the engine is above ~50 %. Left OFF, the battery slowly drains (watch the ammeter).',g:()=>OO(S.alt),a:()=>S.alt=!S.alt},
+ avion:{n:'AVIONICS master',d:'Powers radio, transponder and GPS. Keep OFF during engine start/shutdown to protect them from voltage spikes.',g:()=>OO(S.avion),a:()=>{S.avion=!S.avion;drawPed()}},
+ gov:{n:'GOVERNOR switch',d:'(In a real R44 it is on the end of the collective.) Automatically twists the throttle to hold engine & rotor at 101–102 % once above ~80 %. Turn ON after clutch is fully engaged. GOV OFF light when off. Why it exists: the rotor must run at a constant speed, but every collective movement changes how much power it needs, so the governor keeps adjusting the throttle for you (see the manual, M).',g:()=>OO(S.gov),a:()=>S.gov=!S.gov},
+ strobe:{n:'STROBE / anti-collision light',d:'Flashing red light on the tail fin. ON before start and whenever the rotor is turning.',g:()=>OO(S.strobe),a:()=>S.strobe=!S.strobe},
+ nav:{n:'NAV (position) lights',d:'Red on the left, green on the right, white on the tail — shows other pilots your direction at night.',g:()=>OO(S.nav),a:()=>S.nav=!S.nav},
+ ldg:{n:'LANDING LIGHT',d:'Nose-mounted spotlight for night take-off and landing.',g:()=>OO(S.ldg),a:()=>S.ldg=!S.ldg},
+ clutch:{n:'CLUTCH actuator switch (guarded)',d:'ENGAGE: an electric actuator raises the upper sheave and tensions the V-belts, connecting the engine to the rotor drive. The CLUTCH light stays on while the actuator moves. The rotor must start turning within 5 s. Never disengage in flight.',g:()=>S.clutch?'ENGAGE':'DISENGAGE',a:()=>S.clutch=!S.clutch},
+ key:{n:'IGNITION key / magnetos',d:'OFF – R – L – BOTH – START. Selects the magnetos (engine-driven ignition, independent of the battery). START (spring-loaded) cranks the starter; release to BOTH as soon as the engine fires. R / L alone are used for the magneto check (small RPM drop).',g:()=>['OFF','R','L','BOTH','START'][S.key]},
+ mix:{n:'MIXTURE control (red knob)',d:'Pushed IN = full RICH: required for start and all flight. Pulled OUT = idle CUT-OFF: stops fuel flow — this is how the engine is shut down.',g:()=>S.mix?'RICH':'CUT-OFF',a:()=>S.mix=!S.mix},
+ carb:{n:'CARBURETOR HEAT',d:'Fuel evaporating in the carburetor venturi chills the air; with humidity, ice forms and robs power — even on warm days. Keep the CAT gauge out of the yellow arc (−15 to +5 °C). Pulling heat costs a little power. (Real R44: lever between the seats.)',g:()=>['COLD','HALF','FULL HOT'][S.carb*2],a:()=>S.carb=(S.carb+.5)%1.5},
+ fuelV:{n:'FUEL SHUT-OFF valve',d:'Opens fuel flow from the main & aux tanks to the engine. (Real R44: handle behind the left front seat.)',g:()=>OO(S.fuelV),a:()=>S.fuelV=!S.fuelV},
+ rbrake:{n:'ROTOR BRAKE',d:'Stops and locks the rotor when parked. Must be released before start (ROTOR BRAKE light). Never apply above ~50 % rotor RPM. (Real R44: handle on the cabin ceiling.)',g:()=>S.rbrake?'APPLIED':'RELEASED',a:()=>S.rbrake=!S.rbrake},
+ coll:{n:'COLLECTIVE lever',d:'W raise / S lower. Changes the pitch of both main blades together → more or less thrust → climb or descend. Raising it demands more power; the throttle correlator and governor add throttle automatically. LOW RPM horn if rotor <97 % with collective up.',g:()=>Math.round(C.coll*100)+' %'},
+ twist:{n:'THROTTLE twist grip',d:'T open / G close. Controls engine power. Normally the governor manages it; you use it by hand to crack it for start, set 50–60 % for warm-up/clutch engagement, and close it at shutdown.',g:()=>'grip '+Math.round(S.twist*100)+' % open (with correlator/governor '+Math.round(S.thr*100)+' %) → ENGINE RPM '+Math.round(F.We/Om0*100)+' %'},
+ cyc:{n:'CYCLIC (R44 T-bar)',d:'Mouse in FLY mode (Tab): left/right = roll, forward/back = pitch, Space = centre. Tilts the rotor disc via the swashplate in the direction you push → the thrust tilts → the helicopter accelerates that way. Robinson teetering rotor: avoid low-G push-overs (mast bumping).',g:()=>`fwd ${Math.round(C.cy*100)} %, right ${Math.round(C.cx*100)} %`},
+ ped:{n:'ANTI-TORQUE PEDALS',d:'A left / D right, X centre. Change tail-rotor pitch to control yaw. The main rotor turns counter-clockwise (seen from above), so its torque yaws the nose right — you need LEFT pedal in a hover, more with more power, right pedal in autorotation.',g:()=>Math.round(C.ped*100)+' % (− = left)'}};
+const GA=[
+ {id:'tach',x:-.3,y:.085,r:.046,n:'DUAL TACHOMETER',d:'White needle = ENGINE, yellow = ROTOR, in %. Locked together while the clutch drives the rotor; they split in autorotation (sprag clutch lets the rotor overrun). Normal 101–102 %. Electric: needs the battery.',o:{min:0,max:110,a0:.75*PI,a1:2.25*PI,maj:10,mn:2,lab:[0,20,40,60,80,100],arcs:[[90,108,'#2bb24c',.76],[101,102,'#2bb24c',.9],[108,110,'#d22',.86],[0,90,'#c33',.76]],t:'RPM %',t2:'ENG  ROTOR'}},
+ {id:'asi',x:-.19,y:.085,r:.046,n:'AIRSPEED indicator',d:'Speed through the air in knots (pitot-static, no power needed). Red line 130 KIAS (Vne). Unreliable below ~20 kt and when moving sideways or backwards.',o:{min:0,max:150,a0:-.5*PI+.25,a1:1.5*PI-.25,maj:10,mn:5,lab:[0,20,40,60,80,100,120,140],arcs:[[129,131,'#d22',.86]],t:'KNOTS',t2:'AIRSPEED'}},
+ {id:'ai',x:-.08,y:.085,r:.046,n:'ATTITUDE indicator',d:'Gyro artificial horizon: pitch and bank. Electric — shows an OFF flag without power.'},
+ {id:'alt',x:.03,y:.085,r:.046,n:'ALTIMETER',d:'Pressure altitude above sea level. Long needle = hundreds of feet, short = thousands. Kollsman window set to 29.92 in Hg.',o:{min:0,max:10,a0:-.5*PI,a1:1.5*PI,maj:1,mn:.2,lab:[0,1,2,3,4,5,6,7,8,9],t:'ALT',t2:'100 FT'}},
+ {id:'map',x:-.3,y:-.03,r:.046,n:'MANIFOLD PRESSURE',d:'Engine power indicator (in Hg). Shows ambient pressure with the engine stopped. The R44 limit (placard) is around 25–26 in at sea level — the engine can produce more than the transmission is rated for, so watch it in climbs.',o:{min:10,max:30,a0:.75*PI,a1:2.25*PI,maj:5,mn:1,lab:[10,15,20,25,30],arcs:[[15,25.6,'#2bb24c'],[25.6,26.2,'#d22']],t:'MAN PRESS',t2:'IN HG'}},
+ {id:'vsi',x:-.19,y:-.03,r:.046,n:'VERTICAL SPEED indicator',d:'Climb/descent rate in ×1000 ft/min (lags a little). Descending faster than ~300 ft/min at low airspeed risks vortex-ring state (settling with power).',o:{min:-2,max:2,a0:.1*PI,a1:1.9*PI,maj:.5,mn:.1,lab:[-2,-1,0,1,2],fmt:Math.abs,t:'VERT SPEED',t2:'×1000 FPM'}},
+ {id:'dg',x:-.08,y:-.03,r:.046,n:'DIRECTIONAL GYRO',d:'Heading indicator — stable compass card. Electric.'},
+ {id:'clk',x:.03,y:-.03,r:.046,n:'CLOCK / OAT / VOLTS',d:'Digital display: outside air temperature (carb icing is likely between about −4 and +30 °C with humidity), local time and bus voltage (~14 V when charging).'},
+ {id:'oilt',x:.145,y:.095,r:.027,n:'OIL TEMPERATURE',d:'Green 75–245 °F. Warm up before flight; rising fast = problem.',o:{min:50,max:250,a0:.75*PI,a1:2.25*PI,maj:50,mn:25,lab:[50,150,250],arcs:[[75,245,'#2bb24c'],[245,250,'#d22']],t:'OIL °F'}},
+ {id:'oilp',x:.215,y:.095,r:.027,n:'OIL PRESSURE',d:'Must rise into the green within ~30 s of start, or shut down. OIL light below 25 psi.',o:{min:0,max:100,a0:.75*PI,a1:2.25*PI,maj:25,mn:5,lab:[0,50,100],arcs:[[0,25,'#d22'],[25,95,'#2bb24c'],[95,100,'#d22']],t:'OIL PSI'}},
+ {id:'cht',x:.285,y:.095,r:.027,n:'CYLINDER HEAD TEMP',d:'Hottest cylinder temperature, red line 500 °F. Rises with power and low airspeed climbs.',o:{min:200,max:500,a0:.75*PI,a1:2.25*PI,maj:100,mn:50,lab:[200,300,400,500],arcs:[[200,495,'#2bb24c'],[495,500,'#d22']],t:'CHT °F'}},
+ {id:'cat',x:.355,y:.095,r:.027,n:'CARBURETOR AIR TEMP',d:'Yellow arc −15 to +5 °C = carb-ice danger zone. Use carb heat to keep the needle out of it.',o:{min:-30,max:30,a0:.75*PI,a1:2.25*PI,maj:10,mn:5,lab:[-30,0,30],arcs:[[-15,5,'#e0b000']],t:'CARB °C'}},
+ {id:'fuelm',x:.145,y:.025,r:.027,n:'FUEL – MAIN tank',d:'Main tank (~30 gal). LOW FUEL light at ~3 gal ≈ 10 min of flight left.',o:{min:0,max:1,a0:.75*PI,a1:2.25*PI,maj:.5,mn:.25,lab:[0,.5,1],fmt:v=>v?v<1?'½':'F':'E',arcs:[[0,.1,'#d22']],t:'MAIN'}},
+ {id:'fuela',x:.215,y:.025,r:.027,n:'FUEL – AUX tank',d:'Aux tank (~17 gal) drains by gravity into the main tank.',o:{min:0,max:1,a0:.75*PI,a1:2.25*PI,maj:.5,mn:.25,lab:[0,.5,1],fmt:v=>v?v<1?'½':'F':'E',t:'AUX'}},
+ {id:'amm',x:.285,y:.025,r:.027,n:'AMMETER',d:'Battery charge (+) or discharge (−) current. Negative with the engine running = alternator off or failed.',o:{min:-60,max:60,a0:.75*PI,a1:2.25*PI,maj:30,mn:10,lab:[-60,0,60],t:'AMPS'}},
+ {id:'hobbs',x:.355,y:.025,r:.027,n:'HOBBS meter',d:'Counts engine hours (runs with oil pressure) — used for maintenance and billing.'}];
+const GI={};GA.forEach(g=>GI[g.id]=g);
+const ANN=[['CLUTCH','#ffb000',()=>S.cm],['ALT','#ff3030',()=>!(S.alt&&S.running&&F.We/Om0>.5)],['OIL','#ff3030',()=>S.oilP<25],['LOW FUEL','#ff3030',()=>S.fuelM<3],
+ ['LOW RPM','#ff3030',()=>S.low],['STARTER ON','#ffb000',()=>S.starter],['GOV OFF','#ffb000',()=>!S.gov],['ROTOR BRAKE','#ffb000',()=>S.rbrake],['MR CHIP','#ff3030',()=>0],['TR CHIP','#ff3030',()=>0]];
+CTRL.ann={n:'WARNING / CAUTION lights',d:'Red = warning, amber = caution. CLUTCH: actuator moving · ALT: not charging · OIL: low pressure · LOW FUEL · LOW RPM (with horn) · STARTER ON · GOV OFF · ROTOR BRAKE · MR/TR CHIP: metal in a gearbox — land immediately.',g:()=>S.elec?'powered':'no power'};
+GA.forEach(g=>CTRL[g.id]=CTRL[g.id]||{n:g.n,d:g.d});
+const P2=(x,y)=>[CW/2+x*PS,CH/2-y*PS];
+function dial(c,g){const o=g.o,[X,Y]=P2(g.x,g.y),Rr=g.r*PS;c.save();c.translate(X,Y);
+ const gr=c.createRadialGradient(0,-Rr*.3,Rr*.1,0,0,Rr);gr.addColorStop(0,'#1d2023');gr.addColorStop(1,'#050606');c.fillStyle=gr;c.beginPath();c.arc(0,0,Rr,0,7);c.fill();
+ if(!o){c.restore();return}const A=v=>o.a0+(v-o.min)/(o.max-o.min)*(o.a1-o.a0);g.A=A;
+ for(const[a,b,cl,rr]of o.arcs||[]){c.strokeStyle=cl;c.lineWidth=Rr*.1;c.beginPath();c.arc(0,0,Rr*(rr||.86),A(a),A(b));c.stroke()}
+ c.strokeStyle='#eee';for(let v=o.min;v<=o.max+1e-6;v+=o.mn){const big=Math.abs((v-o.min)/o.maj-Math.round((v-o.min)/o.maj))<1e-3,a=A(v);c.lineWidth=big?Rr*.045:Rr*.025;c.beginPath();c.moveTo(Math.cos(a)*Rr*.95,Math.sin(a)*Rr*.95);c.lineTo(Math.cos(a)*Rr*(big?.76:.85),Math.sin(a)*Rr*(big?.76:.85));c.stroke()}
+ c.fillStyle='#f2f2f2';c.textAlign='center';c.textBaseline='middle';c.font=`600 ${Rr*(g.r>.03?.17:.24)}px Arial`;
+ for(const v of o.lab){const a=A(v);c.fillText(o.fmt?o.fmt(v):v,Math.cos(a)*Rr*.6,Math.sin(a)*Rr*.6)}
+ c.font=`${Rr*(g.r>.03?.11:.16)}px Arial`;c.fillStyle='#bbb';c.fillText(o.t,0,Rr*.3);if(o.t2)c.fillText(o.t2,0,Rr*.45);c.restore()}
+function needle(g,a,len=.82,w=.05,col='#f4f4f4'){const[X,Y]=P2(g.x,g.y),Rr=g.r*PS;px.save();px.translate(X,Y);px.rotate(a);px.fillStyle=col;px.shadowColor='rgba(0,0,0,.6)';px.shadowBlur=4;px.shadowOffsetY=2;
+ px.beginPath();px.moveTo(-Rr*.18,-Rr*w);px.lineTo(Rr*len,-Rr*w*.3);px.lineTo(Rr*len,Rr*w*.3);px.lineTo(-Rr*.18,Rr*w);px.fill();px.shadowBlur=0;px.fillStyle='#222';px.beginPath();px.arc(0,0,Rr*.09,0,7);px.fill();px.restore()}
+const SWX=[['clutch',-.345],['batt',-.25],['alt',-.19],['avion',-.13],['gov',-.07],['strobe',-.01],['nav',.05],['ldg',.11]];
+{const c=bx,g=c.createLinearGradient(0,0,0,CH);g.addColorStop(0,'#2a2d31');g.addColorStop(1,'#1a1c1f');c.fillStyle=g;c.fillRect(0,0,CW,CH);
+ for(let i=0;i<9000;i++){c.fillStyle=`rgba(255,255,255,${Math.random()*.03})`;c.fillRect(Math.random()*CW,Math.random()*CH,2,2)}
+ GA.forEach(g=>dial(c,g));c.fillStyle='#ddd';c.textAlign='center';c.font='bold 15px Arial';
+ for(const[id,x]of SWX){const[X,Y]=P2(x,-.108);c.fillText(id==='avion'?'AVIONICS':id==='ldg'?'LDG LT':id==='nav'?'NAV LT':id.toUpperCase(),X,Y)}
+ const[KX,KY]=P2(.27,-.14);c.font='bold 13px Arial';['OFF','R','L','BOTH','START'].forEach((t,i)=>{const a=-PI/2+(i-2)*.5;c.fillText(t,KX+Math.cos(a)*48,KY+Math.sin(a)*48)});
+ c.fillText('IGNITION',KX,KY+48);c.font='11px Arial';c.fillStyle='#999';c.fillText('ON',P2(-.25,-.125)[0]-26,P2(0,-.125)[1]);
+ c.strokeStyle='#555';c.lineWidth=2;c.strokeRect(...P2(-.385,.198),.77*PS,.036*PS)}
+function drawPanel(){const c=px,el=S.elec;c.drawImage(bgc,0,0);
+ const e=new THREE.Euler().setFromQuaternion(F.q,'YXZ'),hdg=((-e.y*180/PI)%360+360)%360,vb=F.v.clone().sub(wind).applyQuaternion(F.q.clone().invert()),ias=Math.max(0,-vb.z*1.944);
+ const g=GI;needle(g.tach,g.tach.A(el?clamp(F.We/Om0*100,0,110):0));needle(g.tach,g.tach.A(el?clamp(F.Om/Om0*100,0,110):0),.66,.07,'#ffd166');
+ needle(g.asi,g.asi.A(ias<15?0:Math.min(150,ias)));const alt=F.p.y*3.281;needle(g.alt,g.alt.A((alt%1000)/100),.84,.04);needle(g.alt,g.alt.A((alt%10000)/1000),.52,.08);
+ S.vsi=(S.vsi||0)+(F.v.y*196.85/1000-(S.vsi||0))*.08;needle(g.vsi,g.vsi.A(clamp(S.vsi,-2,2)));
+ const amb=29.92*Math.exp(-F.p.y/8400),re=clamp(F.We/Om0,0,1);S.map=amb-(amb-amb*(.25+.68*S.frac))*clamp(re*2,0,1);needle(g.map,g.map.A(clamp(S.map,10,30)));
+ needle(g.oilt,g.oilt.A(el?clamp(S.oilT,50,250):50));needle(g.oilp,g.oilp.A(el?S.oilP:0));needle(g.cht,g.cht.A(el?clamp(S.cht,200,500):200));needle(g.cat,g.cat.A(el?clamp(S.carbT,-30,30):-30));
+ needle(g.fuelm,g.fuelm.A(el?S.fuelM/30:0));needle(g.fuela,g.fuela.A(el?S.fuelA/17:0));needle(g.amm,g.amm.A(el?clamp(S.amps,-60,60):0));
+ // attitude
+ {const[X,Y]=P2(g.ai.x,g.ai.y),Rr=g.ai.r*PS*.94;c.save();c.translate(X,Y);c.beginPath();c.arc(0,0,Rr,0,7);c.clip();
+  const pit=el?e.x:0,rol=el?-e.z:0;c.save();c.rotate(-rol);c.translate(0,pit*Rr*2.2);c.fillStyle='#2f78c4';c.fillRect(-Rr*3,-Rr*3,Rr*6,Rr*3);c.fillStyle='#7a4a24';c.fillRect(-Rr*3,0,Rr*6,Rr*3);
+  c.strokeStyle='#fff';c.lineWidth=2;c.beginPath();c.moveTo(-Rr*3,0);c.lineTo(Rr*3,0);for(let p=-20;p<=20;p+=5)if(p){const y=-p*PI/180*Rr*2.2,w=p%10?Rr*.15:Rr*.3;c.moveTo(-w,y);c.lineTo(w,y)}c.stroke();c.restore();
+  for(let b=-60;b<=60;b+=b%30===0&&Math.abs(b)<60?10:30){const a=-PI/2+b*PI/180;c.strokeStyle='#fff';c.lineWidth=2;c.beginPath();c.moveTo(Math.cos(a)*Rr*.85,Math.sin(a)*Rr*.85);c.lineTo(Math.cos(a)*Rr*(b%30?.93:.97),Math.sin(a)*Rr*(b%30?.93:.97));c.stroke()}
+  c.strokeStyle='#ff9b1a';c.lineWidth=4;c.beginPath();c.moveTo(-Rr*.55,0);c.lineTo(-Rr*.18,0);c.lineTo(0,Rr*.1);c.lineTo(Rr*.18,0);c.lineTo(Rr*.55,0);c.stroke();
+  if(!el){c.fillStyle='#d22';c.fillRect(-Rr*.5,Rr*.35,Rr*.4,Rr*.22);c.fillStyle='#fff';c.font=`bold ${Rr*.17}px Arial`;c.fillText('OFF',-Rr*.46,Rr*.52)}c.restore()}
+ // DG
+ {const[X,Y]=P2(g.dg.x,g.dg.y),Rr=g.dg.r*PS*.94;c.save();c.translate(X,Y);c.save();c.rotate(-(el?hdg:0)*PI/180);c.strokeStyle='#eee';c.fillStyle='#eee';c.textAlign='center';c.textBaseline='middle';
+  for(let d=0;d<360;d+=5){c.lineWidth=d%10?1:2;c.beginPath();c.moveTo(0,-Rr*.95);c.lineTo(0,-Rr*(d%10?.88:.8));c.stroke();if(d%30===0){c.font=`bold ${Rr*.18}px Arial`;c.fillText({0:'N',90:'E',180:'S',270:'W'}[d]||d/10,0,-Rr*.64)}c.rotate(5*PI/180)}
+  c.restore();c.strokeStyle='#ff9b1a';c.lineWidth=3;c.beginPath();c.moveTo(0,-Rr*.98);c.lineTo(0,-Rr*.75);c.moveTo(0,-Rr*.35);c.lineTo(0,Rr*.35);c.moveTo(-Rr*.25,0);c.lineTo(Rr*.25,0);c.moveTo(-Rr*.1,Rr*.3);c.lineTo(Rr*.1,Rr*.3);c.stroke();c.restore()}
+ // digital
+ const dig=(gg,lines)=>{const[X,Y]=P2(gg.x,gg.y),Rr=gg.r*PS;c.fillStyle='#0b120c';c.fillRect(X-Rr*.8,Y-Rr*.6,Rr*1.6,Rr*1.2);if(!el)return;c.fillStyle='#7dff9a';c.textAlign='center';c.font=`bold ${Rr*(gg.r>.03?.26:.3)}px Consolas,monospace`;lines.forEach((l,i)=>c.fillText(l,X,Y+(i-(lines.length-1)/2)*Rr*.36))};
+ const d=new Date();dig(g.clk,['OAT 15°C',`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`,(S.amps>0?14.1:12.4*Math.min(1,S.batQ+.6)).toFixed(1)+' V']);
+ S.hobbs=(S.hobbs||1234.5);dig(g.hobbs,[S.hobbs.toFixed(1)]);
+ // annunciators
+ ANN.forEach(([t,cl,f],i)=>{const[X,Y]=P2(-.381+i*.0766,.194),w=.07*PS,h=.028*PS,on=el&&f();c.fillStyle=on?cl:'#191a1b';c.shadowColor=cl;c.shadowBlur=on?18:0;c.fillRect(X,Y,w,h);c.shadowBlur=0;
+  c.fillStyle=on?'#1a0a00':'#4a3a2a';c.font='bold 13px Arial';c.textAlign='center';c.textBaseline='middle';c.fillText(t,X+w/2,Y+h/2)});
+ panTex.needsUpdate=true}
+function drawPed(){const c=pdx;c.fillStyle='#1d1f22';c.fillRect(0,0,420,560);const on=S.avion&&S.elec;
+ const unit=(y,h,t,txt)=>{c.fillStyle='#0d0e10';c.fillRect(14,y,392,h);c.strokeStyle='#444';c.strokeRect(14,y,392,h);c.fillStyle='#999';c.font='12px Arial';c.textAlign='left';c.fillText(t,22,y+14);
+  c.fillStyle=on?'#ffb347':'#221a10';c.font='bold 26px Consolas,monospace';c.fillText(on?txt:'',90,y+h/2+10);for(let k=0;k<2;k++){c.fillStyle='#2a2c30';c.beginPath();c.arc(370-k*0,y+h/2,14,0,7);c.fill()}};
+ unit(14,70,'COM/NAV','122.850 ⇄ 121.500');unit(94,60,'XPDR','1200   ALT');unit(164,46,'AUDIO','');unit(220,120,'GPS',on?'':'');
+ if(on){c.fillStyle='#103018';c.fillRect(70,240,280,90);c.strokeStyle='#4f8';c.beginPath();c.moveTo(200,320);c.lineTo(210,250);c.stroke();c.fillStyle='#4f8';c.font='14px Arial';c.fillText('GS 0 kt  TRK ---',100,262)}
+ c.fillStyle='#ddd';c.font='bold 14px Arial';c.textAlign='center';c.fillText('MIXTURE',98,392);c.fillText('CARB HEAT',322,392);c.fillText('FUEL VALVE',98,482);c.fillText('ROTOR BRAKE',322,482);
+ c.font='11px Arial';c.fillStyle='#e44';c.fillText('PULL = CUT-OFF',98,452);c.fillStyle='#aaa';c.fillText('PULL = HOT',322,452);c.fillText('ON ↑   OFF →',98,545);c.fillText('PULL = ON',322,545);pdTex.needsUpdate=true}
+// 3D switches on panel
+const SW={};for(const[id,x]of SWX){const p=new THREE.Group();p.position.set(x,-.145,0);panel.add(p);mk(new THREE.CylinderGeometry(.009,.009,.008,20).rotateX(PI/2),M.chrome,0,0,.004,p);
+ const lev=new THREE.Group();lev.position.z=.008;p.add(lev);mk(new THREE.CylinderGeometry(.003,.0035,.024,10).rotateX(PI/2).translate(0,0,.012),M.chrome,0,0,0,lev);mk(new THREE.SphereGeometry(.0045,12,8),M.chrome,0,0,.024,lev);SW[id]=lev;
+ if(id==='clutch'){mk(new THREE.BoxGeometry(.004,.03,.03),M.red,-.014,0,.015,p);mk(new THREE.BoxGeometry(.004,.03,.03),M.red,.014,0,.015,p)}hit(id,new THREE.BoxGeometry(.045,.05,.04),0,0,.02,p)}
+GA.forEach(g=>{mk(new THREE.TorusGeometry(g.r+.002,.0045,12,64),M.black,g.x,g.y,.004,panel);const gl=mk(new THREE.CircleGeometry(g.r,48),new THREE.MeshPhysicalMaterial({transparent:true,opacity:.08,roughness:.02,clearcoat:1,depthWrite:false}),g.x,g.y,.007,panel);gl.castShadow=false;hit(g.id,new THREE.CircleGeometry(g.r,24),g.x,g.y,.009,panel)});
+hit('ann',new THREE.PlaneGeometry(.77,.036),0,.18,.006,panel);
+const keyG=new THREE.Group();keyG.position.set(.27,-.14,.005);panel.add(keyG);mk(new THREE.CylinderGeometry(.017,.019,.012,28).rotateX(PI/2),M.chrome,0,0,0,keyG);const keyB=new THREE.Group();keyG.add(keyB);
+mk(new RB(.012,.034,.008,2,.003),M.chrome,0,.004,.012,keyB);hit('key',new THREE.BoxGeometry(.06,.06,.04),0,0,.01,keyG);
+const knob=(x,y,mat,id)=>{const g=new THREE.Group();g.position.set(x,y,0);ped.add(g);mk(new THREE.CylinderGeometry(.004,.004,.06,10).rotateX(PI/2),M.chrome,0,0,0,g);const k=mk(new THREE.CylinderGeometry(.015,.015,.02,24).rotateX(PI/2),mat,0,0,.012,g);hit(id,new THREE.BoxGeometry(.06,.06,.06),0,0,.02,g);return k};
+const mixK=knob(-.08,-.1,M.red,'mix'),carbK=knob(.08,-.1,M.black,'carb');
+const fuelL=new THREE.Group();fuelL.position.set(-.08,-.165,.01);ped.add(fuelL);mk(new RB(.014,.05,.014,2,.004),M.red,0,.018,0,fuelL);hit('fuelV',new THREE.BoxGeometry(.06,.06,.04),0,0,.01,fuelL);
+const rbL=new THREE.Group();rbL.position.set(.08,-.165,.01);ped.add(rbL);mk(new THREE.CylinderGeometry(.006,.006,.04,10).rotateX(PI/2).translate(0,0,.02),M.chrome,0,0,0,rbL);mk(new RB(.05,.012,.012,2,.004),M.red,0,0,.04,rbL);hit('rbrake',new THREE.BoxGeometry(.06,.06,.06),0,0,.02,rbL);
+heli.traverse(o=>{if(o.isMesh&&o.userData.id){o.castShadow=false}});
+
+/* ---------- lessons ---------- */
+const re_=()=>F.We/Om0;
+const LES={start:[['rbrake','Rotor brake — RELEASE',()=>!S.rbrake],['fuelV','Fuel shut-off valve — ON',()=>S.fuelV],['batt','Battery — ON',()=>S.batt],['strobe','Strobe — ON',()=>S.strobe],
+ ['clutch','Clutch switch — confirm DISENGAGED',()=>!S.clutch],['mix','Mixture — RICH (push in)',()=>S.mix],['twist','Throttle grip — crack open ~10 % (T open / G close)',()=>S.twist>.04&&S.twist<.3],
+ ['key','Key — hold START; release to BOTH when engine fires',()=>S.running&&S.key===3],['oilp','Oil pressure — green within 30 s',()=>S.oilP>25],['alt','Alternator — ON',()=>S.alt],['avion','Avionics — ON',()=>S.avion],
+ ['twist','Throttle — adjust (T / G) until ENGINE RPM (white tach needle) reads 50–60 %',()=>re_()>.48&&re_()<.68],['clutch','Clutch — ENGAGE (rotor must turn within 5 s)',()=>S.clutch&&F.Om>.3],['ann','Wait — CLUTCH light OUT (keep engine 50–70 %)',()=>S.clutchE>=1],
+ ['cat','Carb heat — keep CAT out of the yellow arc',()=>S.carbT>5||S.carbT<-15],['gov','Governor — ON',()=>S.gov],['twist','Throttle — open (T) until ENGINE RPM passes ~85 %; governor then holds 101–102 %',()=>F.Om/Om0>.99],
+ ['coll','Collective — W: raise slowly to a 3-ft hover (Tab = FLY mode, hold left pedal A)',()=>F.agl>.6&&F.agl<2.5],['cyc','Hold a stable hover for 5 s',()=>ht>5]],
+ shut:[['coll','Collective — full down',()=>C.coll<.02],['gov','Governor — OFF',()=>!S.gov],['twist','Throttle — close (G) until ENGINE RPM is below 70 %',()=>re_()<.7],['clutch','Clutch — DISENGAGE',()=>!S.clutch],
+ ['ann','Wait — CLUTCH light OUT',()=>S.clutchE<=0],['mix','Mixture — CUT-OFF (pull)',()=>!S.mix],['key','Key — OFF',()=>S.key===0],['rbrake','Rotor brake — apply below 50 % rotor RPM',()=>S.rbrake&&F.Om/Om0<.5],
+ ['avion','Avionics — OFF',()=>!S.avion],['alt','Alternator — OFF',()=>!S.alt],['strobe','Strobe — OFF',()=>!S.strobe],['batt','Battery — OFF',()=>!S.batt],['fuelV','Fuel valve — OFF',()=>!S.fuelV]],
+ free:[['cyc','Free flight — try: 3-ft hover, hover-taxi to the runway, take-off at 60 kt, autorotation (throttle closed, collective down, right pedal)',()=>false]]};
+let L={k:'start',done:[]};
+function setLesson(k){L={k,done:LES[k].map(()=>false)};if(k==='shut'&&!S.running)quick();renderSteps()}
+function renderSteps(){const st=LES[L.k];let cur=L.done.indexOf(false);$('steps').innerHTML=st.map((s,i)=>`<div class="st ${L.done[i]?'done':i===cur?'cur':''}">${s[1]}${i===cur?'<div id="live" style="color:#8fd3ff;font-weight:400;font-family:Consolas,monospace"></div>':''}</div>`).join('')+(cur<0?'<div style="color:#6fdc8c;margin-top:6px"><b>Lesson complete ✔</b></div>':'')}
+function lessonTick(t){const st=LES[L.k],i=L.done.indexOf(false);hits.forEach(h=>h.material.opacity=0);if(i<0)return;
+ const lv=$('live');if(lv)lv.textContent=`now: ENGINE ${Math.round(F.We/Om0*100)} % · ROTOR ${Math.round(F.Om/Om0*100)} % · grip ${Math.round(S.twist*100)} %`;
+ if(st[i][2]()){L.done[i]=true;renderSteps();return}const id=st[i][0];hits.forEach(h=>{if(h.userData.id===id)h.material.opacity=.16+.14*Math.sin(t*6)})}
+
+/* ---------- input ---------- */
+const FWD={y:.12,p:-.22},keys={};let camMode=0,look={...FWD},orb={a:.6,e:.3,d:16},drag=null,mouse={x:0,y:0},fov=68,hover=null,lockFail=false;
+const isAlt=()=>keys.AltLeft||keys.AltRight;
+addEventListener('keydown',e=>{if(e.altKey||e.key==='Alt'||e.code==='Tab')e.preventDefault();keys[e.code]=true;if(e.repeat)return;const k=e.code;
+ if(k==='KeyC')camMode=(camMode+1)%3;if(k==='KeyV')camMode=camMode?0:1;if(k==='KeyZ'){look={...FWD};fov=68}if(k==='KeyP')paused=!paused;if(k==='Backspace'){e.preventDefault();reset()}
+ if(k==='Space'){e.preventDefault();C.tx=C.ty=0}if(k==='KeyX')C.ped=0;if(k==='KeyM')toggleMan();if(k==='KeyH'){for(const id of['help','panel'])$(id).style.display=$(id).style.display==='none'?'':'none'}});
+addEventListener('keyup',e=>{if(e.key==='Alt')e.preventDefault();keys[e.code]=false});
+addEventListener('blur',()=>{for(const k in keys)keys[k]=false});
+const cv=renderer.domElement,ray=new THREE.Raycaster();
+function pickAt(x,y){const r=cv.getBoundingClientRect();ray.setFromCamera(new THREE.Vector2((x-r.left)/r.width*2-1,-(y-r.top)/r.height*2+1),camera);const h=ray.intersectObjects(hits,false)[0];return h&&h.distance<(camMode?60:2.5)?h.object.userData.id:null}
+let keyHold=false;
+const locked=()=>document.pointerLockElement===cv;
+cv.addEventListener('pointerdown',e=>{
+ if(!locked()&&!lockFail){lockMouse();return}            // first click takes the controls
+ const fl=locked();if(fl&&!isAlt())return;               // flying: clicks do nothing unless Alt (free look) is held
+ const x=fl?innerWidth/2:e.clientX,y=fl?innerHeight/2:e.clientY,id=pickAt(x,y),back=e.button===2||e.shiftKey;if(id&&(CTRL[id].a||id==='key'))sfxClick();
+ if(id==='key'){if(S.key===3&&!back){S.key=4;keyHold=true}else S.key=clamp(S.key+(back?-1:1),0,3)}
+ else if(id==='carb'&&back)S.carb=(S.carb+1)%1.5;
+ else if(id&&CTRL[id].a)CTRL[id].a();else if(!id&&!fl)drag={x:e.clientX,y:e.clientY};showTip(x,y,id)});
+addEventListener('pointerup',()=>{if(keyHold){S.key=3;keyHold=false}drag=null});
+document.addEventListener('pointerlockchange',()=>{drag=null;$('tip').style.display='none'});
+cv.addEventListener('mousemove',e=>{if(!locked())return;const s=+$('sens').value;
+ if(isAlt()){const k=.003*s;look.y-=e.movementX*k;look.p=clamp(look.p-e.movementY*k,-1.35,1.2);if(camMode===2){orb.a-=e.movementX*k*1.5;orb.e=clamp(orb.e+e.movementY*k*1.5,-.2,1.4)}}
+ else{const k=.0025*s;C.tx=clamp(C.tx+e.movementX*k,-1,1);C.ty=clamp(C.ty-e.movementY*k,-1,1)}});
+cv.addEventListener('pointermove',e=>{if(locked())return;mouse.x=e.clientX/innerWidth*2-1;mouse.y=e.clientY/innerHeight*2-1;
+ if(drag){const dx=(e.clientX-drag.x)*.004,dy=(e.clientY-drag.y)*.004;drag={x:e.clientX,y:e.clientY};if(camMode===0){look.y+=dx*1.2;look.p=clamp(look.p+dy*1.2,-1.3,1.2)}else{orb.a-=dx*1.5;orb.e=clamp(orb.e+dy*1.5,-.2,1.4)}$('tip').style.display='none';return}
+ showTip(e.clientX,e.clientY,pickAt(e.clientX,e.clientY))});
+cv.addEventListener('wheel',e=>{if(camMode===0)fov=clamp(fov+e.deltaY*.03,25,90);else orb.d=clamp(orb.d*(1+e.deltaY*.001),5,120)},{passive:true});
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+function lockMouse(){const fail=()=>{lockFail=true};try{const p=cv.requestPointerLock();if(p&&p.catch)p.catch(fail)}catch(e){fail()}}
+document.addEventListener('pointerlockerror',()=>{lockFail=true});
+cv.addEventListener('dblclick',()=>{if(!locked()){lockFail=false;lockMouse()}});
+function showTip(px0,py0,id){const t=$('tip');hover=id;if(!id){t.style.display='none';return}const c=CTRL[id];
+ t.innerHTML=`<b>${c.n}</b><br>${c.d}${c.g?`<i>Now: ${c.g()}</i>`:''}`;t.style.display='block';const x=px0+18,y=py0+14;t.style.left=Math.min(x,innerWidth-360)+'px';t.style.top=Math.min(y,innerHeight-t.offsetHeight-10)+'px'}
+function input(dt){const K=c=>keys[c]?1:0;
+ let tx=C.tx,ty=C.ty;
+ const gp=navigator.getGamepads?[...navigator.getGamepads()].find(g=>g):null,dz=v=>Math.abs(v)<.08?0:v;
+ if(gp){tx+=dz(gp.axes[2]||0);ty+=-dz(gp.axes[3]||0);C.ped=clamp(dz(gp.axes[0]),-1,1)*(Math.abs(gp.axes[0])>.08?1:0)||C.ped;C.coll=clamp(C.coll-dz(gp.axes[1])*.4*dt,0,1)}
+ const rt=Math.min(1,dt*12);C.cx+=(clamp(tx,-1,1)-C.cx)*rt;C.cy+=(clamp(ty,-1,1)-C.cy)*rt;
+ C.coll=clamp(C.coll+((K('KeyW')||K('PageUp'))-(K('KeyS')||K('PageDown')))*.3*dt,0,1);C.ped=clamp(C.ped+(K('KeyD')-K('KeyA'))*1.1*dt,-1,1);
+ $('sdot').style.left=(50+C.cx*45)+'%';$('sdot').style.top=(50-C.cy*45)+'%';
+ const fl=locked(),al=fl&&isAlt();
+ if(fl&&!al){const k=Math.min(1,dt*7);look.y+=(FWD.y-look.y)*k;look.p+=(FWD.p-look.p)*k}   // head snaps back when Alt is released
+ $('xh').hidden=!al;
+ $('mode').innerHTML=al?'👁 FREE LOOK — aim the dot at a control · click = use · right-click = back':fl?'✈ Flying — mouse = cyclic · hold <kbd>Alt</kbd> to look around and use switches · <kbd>Esc</kbd> releases mouse':lockFail?'🖱 Mouse capture blocked — click switches directly, drag to look · double-click to retry':'Click the view to take the controls';
+ S.twist=clamp(S.twist+(K('KeyT')-K('KeyG'))*.35*dt,0,1);S.sas=$('sas').checked}
+$('les').onchange=e=>setLesson(e.target.value);$('qs').onclick=()=>{quick();setLesson(L.k)};$('rs').onclick=()=>{reset()};
+$('wind').onchange=e=>windSpd=+e.target.value;
+
+/* ---------- pilot's manual ---------- */
+const MAN=`<button id="mx">Close (M)</button><h2>R44 Pilot's Manual — how the systems work</h2>
+<p>A simplified engineering guide to the Robinson R44 as modelled in this trainer. It is for learning only, not a replacement for the real Pilot's Operating Handbook.</p>
+<h3>1 · The drive train: from engine to rotor</h3>
+<p>The <b>Lycoming O-540</b> six-cylinder piston engine lies flat behind the cabin. Its power travels like this:</p>
+<p><b>Engine → lower pulley (sheave) → V-belts → upper sheave → sprag (one-way) clutch → main gearbox → main rotor</b>, with a long drive shaft through the tail boom to the <b>tail rotor</b> gearbox. Engine and rotor are geared together, which is why the tachometer shows both as a percentage: at 100 % the engine turns about 2,718 rpm and the main rotor about 408 rpm.</p>
+<p>The <b>clutch actuator</b> is an electric motor that pushes the two sheaves apart and tensions the belts. With the belts slack (DISENGAGED) the engine runs without turning the rotor, so it is easy to start. The <b>sprag clutch</b> lets the rotor spin faster than the engine but never slower: if the engine quits, the rotor freewheels and you can autorotate.</p>
+<h3>2 · Why rotor RPM must stay almost constant</h3>
+<p>An aeroplane changes lift by changing speed. A helicopter's rotor runs at a <b>fixed speed</b> and you change lift by changing the <b>pitch (angle) of the blades</b> with the collective. Rotor RPM has a narrow safe band:</p>
+<p>• <b>Too low</b> (below ~97 %, LOW RPM horn): lift falls with the square of RPM, the blades must fly at a higher angle to compensate, and below about 80 % they can stall. A stalled rotor cannot be recovered. Robinson rotors are light, so RPM decays fast: about 1–2 s of reaction time.<br>
+• <b>Too high</b> (above ~108 %): the centrifugal loads on the blades and hub exceed design limits.</p>
+<p>So the pilot's job is to <b>change blade pitch (collective) while keeping RPM at 101–102 %</b>. That is exactly what the throttle, correlator and governor are for.</p>
+<h3>3 · Throttle, correlator and governor</h3>
+<p><b>The problem:</b> raising the collective increases blade pitch → more lift but also more drag → the rotor needs more power → if throttle stays the same, RPM drops. Lowering the collective does the opposite and RPM rises.</p>
+<p><b>The correlator</b> is a mechanical linkage from the collective to the throttle: raising the collective automatically opens the throttle part of the way. It is a coarse, approximate match.</p>
+<p><b>The governor</b> is a small electronic controller. It reads engine RPM and, through a motor on the throttle linkage, keeps twisting the throttle grip to hold <b>101–102 %</b>. It corrects whatever the correlator gets wrong: wind, temperature, altitude, how fast you move the collective. You can feel it turn the grip in your hand and you can overpower it.</p>
+<div class="ex">Example: you are hovering at 102 %. You raise the collective to climb → drag rises → RPM starts to sag to 100 % → the correlator has already opened the throttle a little, and the governor senses the remaining drop and opens it further → RPM returns to 102 %. You never touched the throttle.</div>
+<p><b>Why the governor only works above ~80 %:</b> during start, warm-up and shutdown you deliberately want low RPM. A governor active then would fight you and race the engine to 102 % before the oil is warm or the belts are tensioned. So you set those RPMs by hand, then switch the governor on and roll the throttle open past 80 % where it takes over.</p>
+<p><b>Why 50–60 % for warm-up and clutch engagement:</b></p>
+<p>• With the clutch disengaged the engine has <b>no load</b>, so even a small throttle opening revs it very high. You hold just a crack of throttle.<br>
+• Engaging the clutch at high RPM would snatch the stationary rotor and burn the belts; too low and the engine can stall as the belts take up load. 50–60 % is the gentle middle.<br>
+• As the belts tighten, the engine has to drag the rotor up to speed, so RPM tends to fall. You add a little throttle (T) to keep it near 50–70 % until the CLUTCH light goes out (belts fully tensioned).</p>
+<h3>4 · Ignition and magnetos</h3>
+<p>Spark plugs are fired by two <b>magnetos</b>: small engine-driven generators, completely independent of the battery. That is why the engine keeps running even with the battery off. Each cylinder has two plugs, one from each magneto, for redundancy and better combustion. The key selects OFF / R / L / BOTH; START also turns the electric starter motor. The <b>mag check</b> (R, then L, then BOTH) should show only a small RPM drop on each single magneto.</p>
+<h3>5 · Fuel, mixture and carburetor ice</h3>
+<p>Fuel flows from the main and aux tanks through the <b>fuel shut-off valve</b> to the carburetor. The <b>mixture</b> control sets the fuel-to-air ratio: full RICH for all ground and flight operations here, and pulled to <b>idle cut-off</b> to starve and stop the engine. That is the normal way to shut it down, because it leaves no fuel in the cylinders.</p>
+<p><b>Carburetor ice:</b> air speeding through the carburetor venturi, plus evaporating fuel, can drop its temperature by 20 °C or more. Moisture freezes on the throttle valve and chokes the engine: RPM sags and the governor opens the throttle further to hide it. Keep the <b>CAT gauge out of the yellow arc</b> (−15 to +5 °C) by pulling <b>carb heat</b>, which feeds warm air from around the exhaust.</p>
+<h3>6 · Electrical system</h3>
+<p>The <b>battery</b> powers the starter, the clutch actuator, the governor, the electronic tachometers, the engine gauges and the warning lights. The engine-driven <b>alternator</b> recharges it and carries the load once the engine is above ~50 %. The ALT light shows it is not charging, and the ammeter shows charge (+) or discharge (−). <b>Avionics</b> stay off during start, because the starter motor causes voltage spikes.</p>
+<h3>7 · Flight controls</h3>
+<p><b>Cyclic (mouse):</b> tilts the swashplate, which changes each blade's pitch as it goes around (more on one side, less on the other). That tilts the whole rotor disc, the thrust tilts with it, and the helicopter accelerates in that direction. Inputs need to be small and smooth; the aircraft responds with a slight delay.<br>
+<b>Collective (W/S):</b> changes the pitch of both blades equally for more or less thrust: up/down, and power.<br>
+<b>Pedals (A/D):</b> change tail-rotor pitch. The main rotor turns counter-clockwise seen from above, so its torque turns the fuselage nose-right. The tail rotor pushes against that, so in a hover you hold left pedal. More power needs more left pedal; in autorotation there is no torque, so you need right pedal.<br>
+<b>Teetering rotor:</b> the R44's two blades are hinged together like a see-saw on top of the mast. Never push the cyclic forward abruptly (low-G): the rotor loses its ability to control the fuselage, which rolls right, and the hub can strike the mast (<b>mast bumping</b>), which is catastrophic.</p>
+<h3>8 · Things that bite helicopter pilots (all modelled here)</h3>
+<p><b>Vortex ring state:</b> descending vertically faster than ~300 ft/min at low airspeed. The rotor sinks into its own downwash and loses lift, so adding power makes it worse. To escape, push forward into clean air.<br>
+<b>Ground effect:</b> near the ground (less than one rotor diameter) the cushion of air needs less power, so hovering at 3 ft is easier than at 50 ft.<br>
+<b>Translational lift:</b> above about 15–20 kt the rotor flies into undisturbed air and gains efficiency: the helicopter suddenly climbs or needs less power.<br>
+<b>Dynamic rollover:</b> a skid pinned to the ground while the helicopter rolls about it. Beyond about 30° it cannot be stopped, so lift off smoothly and level.</p>
+<h3>9 · Every switch, control and gauge</h3><dl id="mref"></dl>`;
+function toggleMan(){const m=$('man');if(m.hidden){if(!m.innerHTML){m.innerHTML=MAN;$('mx').onclick=toggleMan;
+ $('mref').innerHTML=Object.values(CTRL).map(c=>`<dt>${c.n}</dt><dd>${c.d}</dd>`).join('')}document.exitPointerLock&&document.exitPointerLock()}m.hidden=!m.hidden}
+$('mb').onclick=toggleMan;
+
+/* ---------- audio ---------- */
+let AC,au;
+// Sounds are synthesised from looping one-cycle buffers whose playback rate follows the real RPM,
+// so blade slap, the Lycoming firing pulses and tail-rotor buzz all change pitch exactly with RPM.
+function initAudio(){AC=new (window.AudioContext||window.webkitAudioContext)();const sr=AC.sampleRate;
+ const out=AC.createBiquadFilter();out.type='lowpass';out.frequency.value=3000;const comp=AC.createDynamicsCompressor();const mg=AC.createGain();mg.gain.value=.9;out.connect(comp).connect(mg).connect(AC.destination);
+ const gn=v=>{const g=AC.createGain();g.gain.value=v;return g},flt=(t,f,q=.7)=>{const b=AC.createBiquadFilter();b.type=t;b.frequency.value=f;b.Q.value=q;return b};
+ const rnd=()=>Math.random()*2-1;
+ const loop=(f,cyc,pulse,extra)=>{const n=Math.round(sr*cyc/f),b=AC.createBuffer(1,n,sr),d=b.getChannelData(0);
+  for(let k=0;k<cyc;k++){const s0=Math.round(k*n/cyc),a=pulse.amp?pulse.amp(k):1;for(let i=0;i<n;i++){const t=((i-s0+n)%n)/sr;if(t>.25)continue;d[i]+=a*pulse(t,k)}}
+  if(extra)for(let i=0;i<n;i++)d[i]+=extra(i/sr,i/n);let m=0;for(const v of d)m=Math.max(m,Math.abs(v));for(let i=0;i<n;i++)d[i]/=m||1;
+  const s=AC.createBufferSource();s.buffer=b;s.loop=true;s.playbackRate.value=.001;s.start();return s};
+ // main rotor: 2 blades × 408 rpm = 13.6 Hz "whop" – low thump + airy crack + swish between passes
+ const rot=loop(13.6,20,Object.assign((t)=>Math.sin(2*PI*48*t)*Math.exp(-t*28)*.9+Math.sin(2*PI*95*t)*Math.exp(-t*45)*.5+rnd()*Math.exp(-t*160)*.55,{amp:()=>.85+Math.random()*.3}),
+  (t,u)=>rnd()*.06*(.6+.4*Math.cos(2*PI*u*20)));
+ // blade-vortex-interaction slap (descents / loaded turns)
+ const slap=loop(13.6,20,(t)=>rnd()*Math.exp(-t*420)+Math.sin(2*PI*260*t)*Math.exp(-t*120)*.6);
+ // Lycoming O-540: 6 cyl at 2718 rpm → 136 firings/s, uneven per cylinder for the piston growl
+ const cylA=[1,.86,.95,.78,1.05,.9];
+ const eng=loop(136,48,Object.assign((t,k)=>(Math.sin(2*PI*70*t)*.7+rnd()*.8)*Math.exp(-t*230)+Math.sin(2*PI*230*t)*Math.exp(-t*400)*.3,{amp:k=>cylA[k%6]*(.9+Math.random()*.2)}),
+  (t)=>Math.sin(2*PI*22.6*t)*.25);
+ // tail rotor: 2 blades × ~2426 rpm ≈ 81 Hz buzz
+ const tr=loop(80.9,40,(t)=>rnd()*Math.exp(-t*900)+Math.sin(2*PI*240*t)*Math.exp(-t*300)*.5);
+ const nb=AC.createBuffer(1,sr*2,sr),nd=nb.getChannelData(0);for(let i=0;i<nd.length;i++)nd[i]=rnd();
+ const noise=()=>{const s=AC.createBufferSource();s.buffer=nb;s.loop=true;s.start();return s};
+ const osc=(t,f)=>{const o=AC.createOscillator();o.type=t;o.frequency.value=f;o.start();return o};
+ const rg=gn(0),sg=gn(0),eg=gn(0),tg=gn(0),wg=gn(0),gg=gn(0),stg=gn(0),cg=gn(0),hg=gn(0),xg=gn(0);
+ const ef=flt('lowpass',600);rot.connect(flt('lowpass',900)).connect(rg).connect(out);slap.connect(flt('highpass',300)).connect(sg).connect(out);
+ eng.connect(ef).connect(eg).connect(out);noise().connect(flt('bandpass',90,.6)).connect(xg).connect(out);
+ tr.connect(flt('bandpass',400,.5)).connect(tg).connect(out);
+ const wf=flt('lowpass',300);noise().connect(wf).connect(wg).connect(out);
+ const go=osc('triangle',900);go.connect(gg).connect(out);const go2=osc('sine',1350);go2.connect(gg);
+ const so=osc('sawtooth',120);so.connect(flt('lowpass',1200)).connect(stg).connect(out);
+ const co=osc('square',180);co.connect(flt('lowpass',800)).connect(cg).connect(out);
+ const ho=osc('square',750);ho.connect(flt('bandpass',1500,1)).connect(hg).connect(out);
+ au={out,rot,slap,eng,tr,ef,wf,go,go2,so,rg,sg,eg,tg,wg,gg,stg,cg,hg,xg}}
+function sfxClick(){if(!AC)return;const s=AC.createBufferSource(),b=AC.createBuffer(1,600,AC.sampleRate),d=b.getChannelData(0);
+ for(let i=0;i<600;i++)d[i]=(Math.random()*2-1)*Math.exp(-i/60);s.buffer=b;const g=AC.createGain();g.gain.value=.35;s.connect(g).connect(AC.destination);s.start()}
+function updAudio(){if(!au)return;const t=AC.currentTime,re=F.We/Om0,rr=F.Om/Om0,s=(p,v,k=.08)=>p.setTargetAtTime(v,t,k);
+ const inside=camMode===0,att=inside?1:1/Math.max(1,camera.position.distanceTo(F.p)/8);
+ const ias=F.v.clone().sub(wind).length(),load=clamp(Math.abs(F.T||0)/(MASS*9.81),0,1.6),desc=clamp(-F.v.y/4,0,1)*clamp(ias/25,0,1);
+ s(au.rot.playbackRate,Math.max(.001,rr));s(au.slap.playbackRate,Math.max(.001,rr));s(au.rg.gain,att*.55*sstep(.02,.4,rr)*(.35+.65*load));
+ s(au.sg.gain,att*.35*rr*rr*(desc+.15*load*sstep(.9,1,rr)));
+ s(au.eng.playbackRate,Math.max(.001,re));s(au.ef.frequency,250+900*S.frac+400*re);
+ s(au.eg.gain,(S.running?.22+.3*S.frac:re>.02?.15:0)*(inside?1:att*.8));s(au.xg.gain,S.running?(.05+.12*S.frac)*(inside?.6:att):0);
+ s(au.tr.playbackRate,Math.max(.001,rr));s(au.tg.gain,(inside?.05:att*.25)*rr*rr*(.5+Math.abs(F.Ttr||0)/1200));
+ s(au.wf.frequency,150+ias*25);s(au.wg.gain,clamp(ias/60,0,1)**2*(inside?.25:.15));
+ s(au.go.frequency,30+870*rr);s(au.go2.frequency,45+1305*rr);s(au.gg.gain,(inside?.018:.004*att)*rr);
+ s(au.so.frequency,80+500*re);s(au.stg.gain,S.starter?.12:0,.02);s(au.cg.gain,S.cm&&S.elec?.03:0,.02);
+ s(au.hg.gain,S.low&&rr>.1?.07:0,.01);s(au.out.frequency,inside?2600:16000,.2)}
+$('start').onclick=()=>{$('start').style.display='none';try{initAudio()}catch(e){}lockMouse()};
+
+/* ---------- loop ---------- */
+window.SIM={F,S,C,step,hits,camera};reset();let last=performance.now(),ang=0,tra=0,pt=0;const tmpE=new THREE.Euler();
+function frame(now){requestAnimationFrame(frame);const dt=Math.min(.05,(now-last)/1000);last=now;const t=now/1000;
+ input(dt);const g=windSpd*(windSpd>5?1+.5*Math.sin(t*.7)*Math.sin(t*1.9):1);wind.set(.866*g,0,.5*g);
+ if(!paused&&!F.crashed){const n=Math.ceil(dt*240);for(let i=0;i<n;i++)step(dt/n);if(S.running&&S.oilP>20)S.hobbs+=dt/3600}
+ ht=F.agl>.3&&F.agl<3&&F.v.length()<1.2&&!F.touch?ht+dt:0;
+ heli.position.copy(F.p);heli.quaternion.copy(F.q);
+ ang+=F.Om*dt;tra+=F.Om*5.95*dt;rSpin.rotation.y=ang;trSpin.rotation.x=tra;rTilt.rotation.set(-F.a1,0,-F.b1);
+ const rr=F.Om/Om0;blur.material.opacity=sstep(.25,.9,rr)*.55;
+ blades.forEach((b,k)=>{const ps=ang+k*PI;b.cone.rotation.z=clamp((F.T||0)/(MASS*9.81),-.3,1.5)*.035;b.pit.rotation.x=(F.th||.012)+(C.cy*.1)*Math.sin(ps)-(C.cx*.08)*Math.cos(ps)});
+ swash.rotation.set(-C.cy*.12,0,-C.cx*.1);swash.position.y=2.42+C.coll*.05;
+ cyc.rotation.set(-C.cy*.22,0,-C.cx*.18);col.rotation.x=C.coll*.32-.08;grip.rotation.z=S.thr*1.2;peds[0].position.z=-1.5+C.ped*.07;peds[1].position.z=-1.5-C.ped*.07;
+ for(const[id]of SWX)SW[id].rotation.x=S[id]?-.6:.6;keyB.rotation.z=-(S.key-2)*.5;mixK.position.z=S.mix?.012:.045;carbK.position.z=.012+S.carb*.035;fuelL.rotation.z=S.fuelV?0:-PI/2;rbL.position.z=S.rbrake?.03:.01;
+ const el=S.elec;navL.forEach(l=>l.visible=el&&S.nav);strobeL.visible=el&&S.strobe&&(t*1.2%1)<.08;ldg.intensity=el&&S.ldg?400:0;
+ // camera
+ camera.fov+=(fov*(camMode?1:1)-camera.fov)*.2;camera.updateProjectionMatrix();
+ if(camMode===0){camera.position.copy(new V(.33,.38,-.55).applyQuaternion(F.q).add(F.p));camera.quaternion.copy(F.q).multiply(new THREE.Quaternion().setFromEuler(tmpE.set(look.p,look.y,0,'YXZ')))}
+ else{tmpE.setFromQuaternion(F.q,'YXZ');const yaw=camMode===1?tmpE.y+(look.y-FWD.y)*1.5:orb.a,e=camMode===1?.18:orb.e,dd=camMode===1?15:orb.d;
+  const tp=new V(Math.sin(yaw)*Math.cos(e)*dd,Math.sin(e)*dd+1,Math.cos(yaw)*Math.cos(e)*dd).add(F.p);tp.y=Math.max(tp.y,groundH(tp.x,tp.z)+.5);
+  camera.position.lerp(tp,camMode===1?.08:1);camera.lookAt(F.p.x,F.p.y+.5,F.p.z)}
+ sun.position.copy(F.p).addScaledVector(sunDir,150);sun.target.position.copy(F.p);
+ const ws=wind.length();sockArm.rotation.set(-PI/2*(1-sstep(0,7,ws))*0.85,Math.atan2(wind.x,wind.z),0);
+ if(t-pt>.033){pt=t;drawPanel();lessonTick(t);updAudio();
+  const e2=tmpE.setFromQuaternion(F.q,'YXZ'),vb=F.v.clone().sub(wind).applyQuaternion(F.q.clone().invert());
+  $('hud').textContent=`IAS ${Math.max(0,-vb.z*1.944).toFixed(0).padStart(3)} kt   GS ${(Math.hypot(F.v.x,F.v.z)*1.944).toFixed(0).padStart(3)} kt   HDG ${String(Math.round(((-e2.y*180/PI)%360+360)%360)).padStart(3,'0')}°
+AGL ${(F.agl*3.281).toFixed(0).padStart(4)} ft   VS ${(F.v.y*196.85).toFixed(0).padStart(5)} fpm
+ROTOR ${(rr*100).toFixed(0).padStart(3)} %   ENG ${(F.We/Om0*100).toFixed(0).padStart(3)} %   MAP ${(S.map||0).toFixed(1)}"
+COLL ${(C.coll*100).toFixed(0).padStart(3)} %   PEDAL ${(C.ped*100).toFixed(0).padStart(4)} %   THR ${(S.thr*100).toFixed(0).padStart(3)} %
+${F.vrs>.3?'⚠ VORTEX RING STATE ':''}${S.ice>.1?'⚠ CARB ICE ':''}${S.low?'⚠ LOW ROTOR RPM ':''}${paused?'⏸ PAUSED ':''}${['COCKPIT','CHASE','ORBIT'][camMode]} view`;
+  if(locked()){const id=isAlt()?pickAt(innerWidth/2,innerHeight/2):null;if(id!==hover)showTip(innerWidth/2,innerHeight/2,id)}
+  if(hover)$('tip').querySelector('i')&&($('tip').querySelector('i').textContent='Now: '+(CTRL[hover].g?CTRL[hover].g():''))}
+ renderer.render(scene,camera)}
+requestAnimationFrame(frame);
+</script>
+
+</html>
