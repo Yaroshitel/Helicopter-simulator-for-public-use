@@ -1,0 +1,312 @@
+{
+ "ctrl": {
+  "batt": {
+   "n": "BATTERY (master) switch",
+   "d": "Connects the battery to the electrical bus. Powers the tachometers, engine gauges, warning lights, starter, clutch actuator and governor. R44 tachs are electric — with the battery off they read zero even with the rotor turning."
+  },
+  "alt": {
+   "n": "ALTERNATOR switch",
+   "d": "Connects the engine-driven alternator. Turn ON after start; the ALT light goes out once the engine is above ~50 %. Left OFF, the battery slowly drains (watch the ammeter)."
+  },
+  "avion": {
+   "n": "AVIONICS master",
+   "d": "Powers radio, transponder and GPS. Keep OFF during engine start/shutdown to protect them from voltage spikes."
+  },
+  "gov": {
+   "n": "GOVERNOR switch",
+   "d": "(In a real R44 it is on the end of the collective.) Automatically twists the throttle to hold engine & rotor at 101–102 % once above ~80 %. Turn ON after clutch is fully engaged. GOV OFF light when off. Why it exists: the rotor must run at a constant speed, but every collective movement changes how much power it needs, so the governor keeps adjusting the throttle for you (see the manual, M)."
+  },
+  "strobe": {
+   "n": "STROBE / anti-collision light",
+   "d": "Flashing red light on the tail fin. ON before start and whenever the rotor is turning."
+  },
+  "nav": {
+   "n": "NAV (position) lights",
+   "d": "Red on the left, green on the right, white on the tail — shows other pilots your direction at night."
+  },
+  "ldg": {
+   "n": "LANDING LIGHT",
+   "d": "Nose-mounted spotlight for night take-off and landing."
+  },
+  "clutch": {
+   "n": "CLUTCH actuator switch (guarded)",
+   "d": "ENGAGE: an electric actuator raises the upper sheave and tensions the V-belts, connecting the engine to the rotor drive. The CLUTCH light stays on while the actuator moves. The rotor must start turning within 5 s. Never disengage in flight."
+  },
+  "key": {
+   "n": "IGNITION key / magnetos",
+   "d": "OFF – R – L – BOTH – START. Selects the magnetos (engine-driven ignition, independent of the battery). START (spring-loaded) cranks the starter; release to BOTH as soon as the engine fires. R / L alone are used for the magneto check (small RPM drop)."
+  },
+  "mix": {
+   "n": "MIXTURE control (red knob)",
+   "d": "Pushed IN = full RICH: required for start and all flight. Pulled OUT = idle CUT-OFF: stops fuel flow — this is how the engine is shut down."
+  },
+  "carb": {
+   "n": "CARBURETOR HEAT",
+   "d": "Fuel evaporating in the carburetor venturi chills the air; with humidity, ice forms and robs power — even on warm days. Keep the CAT gauge out of the yellow arc (−15 to +5 °C). Pulling heat costs a little power. (Real R44: lever between the seats.)"
+  },
+  "fuelV": {
+   "n": "FUEL SHUT-OFF valve",
+   "d": "Opens fuel flow from the main & aux tanks to the engine. (Real R44: handle behind the left front seat.)"
+  },
+  "rbrake": {
+   "n": "ROTOR BRAKE",
+   "d": "Stops and locks the rotor when parked. Must be released before start (ROTOR BRAKE light). Never apply above ~50 % rotor RPM. (Real R44: handle on the cabin ceiling.)"
+  },
+  "coll": {
+   "n": "COLLECTIVE lever",
+   "d": "W raise / S lower. Changes the pitch of both main blades together → more or less thrust → climb or descend. Raising it demands more power; the throttle correlator and governor add throttle automatically. LOW RPM horn if rotor <97 % with collective up."
+  },
+  "twist": {
+   "n": "THROTTLE twist grip",
+   "d": "T open / G close. Controls engine power. Normally the governor manages it; you use it by hand to crack it for start, set 50–60 % for warm-up/clutch engagement, and close it at shutdown."
+  },
+  "cyc": {
+   "n": "CYCLIC (R44 T-bar)",
+   "d": "Mouse in FLY mode (Tab): left/right = roll, forward/back = pitch, Space = centre. Tilts the rotor disc via the swashplate in the direction you push → the thrust tilts → the helicopter accelerates that way. Robinson teetering rotor: avoid low-G push-overs (mast bumping)."
+  },
+  "ped": {
+   "n": "ANTI-TORQUE PEDALS",
+   "d": "A left / D right, X centre. Change tail-rotor pitch to control yaw. The main rotor turns counter-clockwise (seen from above), so its torque yaws the nose right — you need LEFT pedal in a hover, more with more power, right pedal in autorotation."
+  },
+  "ann": {
+   "n": "WARNING / CAUTION lights",
+   "d": "Red = warning, amber = caution. CLUTCH: actuator moving · ALT: not charging · OIL: low pressure · LOW FUEL · LOW RPM (with horn) · STARTER ON · GOV OFF · ROTOR BRAKE · MR/TR CHIP: metal in a gearbox — land immediately."
+  }
+ },
+ "ctrl8": {
+  "batt": {
+   "n": "BATTERIES (overhead)",
+   "d": "Connect the two 24 V batteries to the DC bus. They power the APU starter, the engine start system, fuel pumps, warning lights and the electric instruments until the generators come on line. An APU start draws a lot of current, so do not waste battery time."
+  },
+  "mgenL": {
+   "n": "GENERATOR 1",
+   "d": "Engine-driven AC generator (rectified to 27 V DC). Switch ON once engine 1 is at ground idle; the GEN 1 OFF light goes out and the voltmeter rises to ~28 V."
+  },
+  "mgenR": {
+   "n": "GENERATOR 2",
+   "d": "Same as generator 1, for engine 2. One generator alone can carry the whole electrical load."
+  },
+  "mhyd": {
+   "n": "HYDRAULICS — MAIN system",
+   "d": "The Mi-8 controls are far too heavy to move by hand: hydraulic boosters do the work. Pumps on the main gearbox make pressure once the rotor turns. MAIN ON selects the main system; if it fails, the BACKUP system takes over automatically (HYD BACKUP light). With no hydraulics the cyclic barely moves the rotor."
+  },
+  "nav": {
+   "n": "NAV LIGHTS",
+   "d": "Red on the left, green on the right, white on the tail."
+  },
+  "mbeacon": {
+   "n": "BEACON (anti-collision)",
+   "d": "Two flashing red beacons, on the tail boom and the belly. ON before starting the APU or engines."
+  },
+  "ldg": {
+   "n": "LANDING LIGHTS",
+   "d": "Two retractable lights under the nose."
+  },
+  "msvc": {
+   "n": "SERVICE TANK PUMP",
+   "d": "The engines and the APU draw fuel from a small service (feed) tank behind the cockpit. This electric booster pump pushes that fuel to them. No service pump = no fuel pressure = no start, or a flame-out."
+  },
+  "mpL": {
+   "n": "TANK PUMPS 1 & 2",
+   "d": "Transfer pumps in the left and right main (side) tanks keep the service tank full. Click to switch both."
+  },
+  "mfcL": {
+   "n": "FIRE COCK 1 (guarded)",
+   "d": "Shut-off valve in the fuel line to engine 1, closed in a fire or after shutdown. It must be OPEN for the engine to get fuel."
+  },
+  "mfcR": {
+   "n": "FIRE COCK 2 (guarded)",
+   "d": "Fuel shut-off valve for engine 2."
+  },
+  "mapuS": {
+   "n": "APU START (AI-9V)",
+   "d": "The APU is a small gas turbine in the engine compartment. Its starter runs on battery power; once running (~20 s) it supplies compressed air. That air spins the main engines' air starters. Needs battery and the service pump."
+  },
+  "mapuX": {
+   "n": "APU STOP",
+   "d": "Shuts the APU down. Do this once both engines and generators are running; it is not used in flight."
+  },
+  "msel": {
+   "n": "START SELECTOR",
+   "d": "Chooses which engine the START button will start: engine 1 (left) or engine 2 (right). Engines are started one at a time."
+  },
+  "mstart": {
+   "n": "ENGINE START button",
+   "d": "Starts the automatic start sequence on the selected engine: APU air turns the air starter, the gas generator spins up, at ~15 % Ng the igniters light the fuel, and the starter cuts out at ~55 %. The engine settles at ground idle (~66 % Ng) after about 40 s. Watch EGT: a sudden rise past ~750 °C is a hot start."
+  },
+  "mabort": {
+   "n": "START ABORT",
+   "d": "Stops the start sequence immediately (hung or hot start)."
+  },
+  "mcondL": {
+   "n": "ENGINE 1 CONDITION LEVER (overhead)",
+   "d": "STOP: fuel cut off, engine stops. IDLE: ground idle (~66 % Ng) for start and warm-up. AUTO: the engine fuel control governs the rotor at 95 % and gives whatever power the collective asks for. Click to move forward, right-click back."
+  },
+  "mcondR": {
+   "n": "ENGINE 2 CONDITION LEVER (overhead)",
+   "d": "Same as engine 1, for engine 2."
+  },
+  "rbrake": {
+   "n": "ROTOR BRAKE (overhead lever)",
+   "d": "Brakes the main-rotor drive. Released before engine start, applied after shutdown below ~30 % rotor RPM to stop and lock the rotor."
+  },
+  "mpbrake": {
+   "n": "PARKING BRAKE (wheel brakes)",
+   "d": "Locks the main wheels. The Mi-8 has wheels, not skids, so it would roll on a slope or in wind without it. Release before taxi or lift-off."
+  },
+  "coll": {
+   "n": "COLLECTIVE — \"pitch-gas\" lever",
+   "d": "W raise / S lower. Raises the pitch of all five blades together (1° to 15°, shown on the pitch gauge). Mechanically linked to both engines' fuel controls, so raising it also calls for more power. Turbines take 1–3 s to spool up, so move it smoothly and plan ahead."
+  },
+  "twist": {
+   "n": "CORRECTION twist grip",
+   "d": "T right / G left. On the collective. Fully LEFT limits both engines towards idle (used on the ground). Fully RIGHT gives the engine governors full authority, so they hold the rotor at 95 % automatically. In normal flight it stays fully right."
+  },
+  "cyc": {
+   "n": "CYCLIC stick",
+   "d": "Mouse. Tilts the 21 m rotor disc through hydraulic boosters. A 10-tonne helicopter has huge inertia: it answers late and keeps moving, so use small inputs and anticipate."
+  },
+  "ped": {
+   "n": "PEDALS",
+   "d": "A left / D right. The Mi-8 rotor turns CLOCKWISE seen from above (the R44 turns the other way), so engine torque yaws the nose LEFT and you hold RIGHT pedal in a hover."
+  },
+  "mAnn": {
+   "n": "WARNING / CAUTION panel",
+   "d": "Red = warning, amber = caution, green = system running. Shows starter and APU sequences, engines out, generators off, hydraulic state, brakes, low fuel and low rotor RPM."
+  }
+ },
+ "ga": {
+  "tach": {
+   "n": "DUAL TACHOMETER",
+   "d": "White needle = ENGINE, yellow = ROTOR, in %. Locked together while the clutch drives the rotor; they split in autorotation (sprag clutch lets the rotor overrun). Normal 101–102 %. Electric: needs the battery."
+  },
+  "asi": {
+   "n": "AIRSPEED indicator",
+   "d": "Speed through the air in knots (pitot-static, no power needed). Red line 130 KIAS (Vne). Unreliable below ~20 kt and when moving sideways or backwards."
+  },
+  "ai": {
+   "n": "ATTITUDE indicator",
+   "d": "Gyro artificial horizon: pitch and bank. Electric — shows an OFF flag without power."
+  },
+  "alt": {
+   "n": "ALTIMETER",
+   "d": "Pressure altitude above sea level. Long needle = hundreds of feet, short = thousands. Kollsman window set to 29.92 in Hg."
+  },
+  "map": {
+   "n": "MANIFOLD PRESSURE",
+   "d": "Engine power indicator (in Hg). Shows ambient pressure with the engine stopped. The R44 limit (placard) is around 25–26 in at sea level — the engine can produce more than the transmission is rated for, so watch it in climbs."
+  },
+  "vsi": {
+   "n": "VERTICAL SPEED indicator",
+   "d": "Climb/descent rate in ×1000 ft/min (lags a little). Descending faster than ~300 ft/min at low airspeed risks vortex-ring state (settling with power)."
+  },
+  "dg": {
+   "n": "DIRECTIONAL GYRO",
+   "d": "Heading indicator — stable compass card. Electric."
+  },
+  "clk": {
+   "n": "CLOCK / OAT / VOLTS",
+   "d": "Digital display: outside air temperature (carb icing is likely between about −4 and +30 °C with humidity), local time and bus voltage (~14 V when charging)."
+  },
+  "oilt": {
+   "n": "OIL TEMPERATURE",
+   "d": "Green 75–245 °F. Warm up before flight; rising fast = problem."
+  },
+  "oilp": {
+   "n": "OIL PRESSURE",
+   "d": "Must rise into the green within ~30 s of start, or shut down. OIL light below 25 psi."
+  },
+  "cht": {
+   "n": "CYLINDER HEAD TEMP",
+   "d": "Hottest cylinder temperature, red line 500 °F. Rises with power and low airspeed climbs."
+  },
+  "cat": {
+   "n": "CARBURETOR AIR TEMP",
+   "d": "Yellow arc −15 to +5 °C = carb-ice danger zone. Use carb heat to keep the needle out of it."
+  },
+  "fuelm": {
+   "n": "FUEL – MAIN tank",
+   "d": "Main tank (~30 gal). LOW FUEL light at ~3 gal ≈ 10 min of flight left."
+  },
+  "fuela": {
+   "n": "FUEL – AUX tank",
+   "d": "Aux tank (~17 gal) drains by gravity into the main tank."
+  },
+  "amm": {
+   "n": "AMMETER",
+   "d": "Battery charge (+) or discharge (−) current. Negative with the engine running = alternator off or failed."
+  },
+  "hobbs": {
+   "n": "HOBBS meter",
+   "d": "Counts engine hours (runs with oil pressure) — used for maintenance and billing."
+  }
+ },
+ "guide": {
+  "tach": "Two needles on one scale in % of normal RPM. [b]White = engine, yellow = rotor.[/b] When the clutch is engaged and the engine drives the rotor, they sit exactly on top of each other. Keep them in the narrow green band at [b]101–102 %[/b] with power on. If they split with the rotor needle higher, the engine is no longer driving (sprag clutch freewheeling, as in an autorotation). The wider green arc (90–108 %) is the rotor range allowed in autorotation.",
+  "asi": "Your speed through the air in [b]knots[/b] (1 kt ≈ 1.85 km/h). It works on air pressure from the pitot tube, so it needs no electricity. Clockwise from 0. Typical numbers: 60 kt climb, 90–110 kt cruise. [b]Red line 130 kt[/b] is the never-exceed speed. Below about 20 kt, or when moving sideways, it reads nonsense.",
+  "ai": "The [b]artificial horizon[/b]. The orange symbol is your helicopter; blue is sky, brown is ground. If the line tilts, you are banked: the marks around the top show 10°, 20°, 30° and 60° of bank. If the horizon sits below the orange symbol, the nose is up. Each ladder line is 5° of pitch. Hovering, it should be almost level.",
+  "alt": "Height above sea level in feet, read like a clock. The [b]long needle counts hundreds[/b] (one turn = 1,000 ft) and the [b]short needle counts thousands[/b]. Example: short needle just past 1, long needle on 5 → 1,500 ft. The airfield here is at sea level, so it also shows your height above the pad.",
+  "map": "[b]Manifold pressure[/b] in inches of mercury: the main [b]engine power gauge[/b]. With the engine stopped it shows the outside air pressure (about 29.9 in). At idle the throttle is nearly closed and it drops low (about 12–15 in). The more power you pull with the collective, the higher it goes: about 22–24 in in a hover. Stay out of the red (above about 26 in) or you overload the transmission.",
+  "vsi": "[b]Vertical speed[/b] in thousands of feet per minute. The needle points left (9 o'clock) when level. Up from there means climbing, down means descending. Example: needle at \"5\" above zero = climbing 500 ft/min. It lags a second or two behind reality. In a hover keep it near zero; descending faster than ~300 ft/min with little airspeed risks vortex ring state.",
+  "dg": "The [b]directional gyro[/b] (heading). Read the number under the orange line at the top: N = north, 3 = 030°, E = 090°, S = 180°, W = 270°. The card turns when you yaw with the pedals. The airfield runway runs east–west.",
+  "clk": "A digital box showing [b]outside air temperature[/b], the time, and the [b]electrical voltage[/b]. About 14 V means the alternator is charging; about 12 V means you are running on the battery alone.",
+  "oilt": "[b]Oil temperature[/b] in °F. It starts cold (around 60 °F) and slowly rises into the green as the engine warms. Normal in flight is about 180–220 °F. If it reaches the red line (245 °F) the oil is too hot to protect the engine.",
+  "oilp": "[b]Oil pressure[/b] in psi. After start it must come up into the green within about 30 seconds, or you shut down immediately. Normal is 60–90 psi. Below 25 psi the red OIL warning light comes on.",
+  "cht": "[b]Cylinder head temperature[/b] in °F, measured on the hottest cylinder. It rises with power and with slow, hard climbs (less cooling air). Red line 500 °F.",
+  "cat": "[b]Carburetor air temperature[/b] in °C. If the needle is in the [b]yellow arc (−15 to +5 °C)[/b], ice can form in the carburetor and choke the engine. Pull carb heat until the needle is to the right of the yellow arc.",
+  "fuelm": "[b]Main fuel tank[/b]: E = empty, ½, F = full (about 30 gallons). The LOW FUEL light comes on with about 3 gallons left, roughly 10 minutes of flying. Land.",
+  "fuela": "[b]Auxiliary fuel tank[/b] (about 17 gallons). It drains into the main tank by gravity, so it empties first.",
+  "amm": "[b]Ammeter[/b]: current into (+) or out of (−) the battery. Right of zero = charging, which is normal right after start, then it settles near zero. Left of zero with the engine running = the alternator is off or has failed, and the battery is draining.",
+  "hobbs": "[b]Hobbs meter[/b]: counts engine running hours (to tenths of an hour). Used for maintenance intervals and for renting the aircraft. It does not affect flying."
+ },
+ "guide8": {
+  "mAsi": "Airspeed in [b]kilometres per hour[/b], as on all Soviet aircraft (100 km/h ≈ 54 kt). Typical: 120 km/h climb, 200–220 km/h cruise. The red mark at [b]250 km/h[/b] is the never-exceed speed. Unreliable below about 40 km/h.",
+  "mAi": "Soviet [b]AGB-3K[/b] attitude indicator. It works the opposite way to the R44's: the [b]yellow aircraft symbol tilts with your bank[/b] while the horizon behind it only moves up and down with pitch. Right wing low means you are banking right. Ladder lines are every 10° of pitch.",
+  "mAlt": "Altitude in [b]metres[/b]. The long needle counts hundreds of metres (one turn = 1,000 m) and the short needle counts thousands. Example: short needle just past 1, long needle on 5 → 1,500 m.",
+  "mPitch": "[b]Rotor blade pitch[/b] (collective angle) in degrees, from about 1° (collective down) to 15° (fully up). Hovering takes about 6–8°. A quick way to see how hard the rotor is working.",
+  "mNr": "[b]Rotor RPM[/b] in %. The Mi-8's normal value is [b]95 %[/b] (about 192 rpm), held automatically by the engine governors when the condition levers are in AUTO and the correction grip is fully right. Green 92–97 %; below 88 % the Nr LOW warning comes on. It is driven by its own small tachometer generator, so it reads even with the batteries off, unlike the R44's.",
+  "mHsi": "Heading. Read the number under the orange line at the top (N, 3 = 030°, E, S, W).",
+  "mVsi": "Vertical speed in [b]metres per second[/b]. The needle points left (9 o'clock) in level flight; up is climbing, down is descending. 5 m/s ≈ 1,000 ft/min. Keep it near zero in a hover, and below about 3 m/s when descending slowly (vortex ring state risk).",
+  "mRalt": "[b]Radio altimeter[/b]: your true height above the ground in metres, measured by radar under the belly. It matters most below 50 m and for hovering. Needs electrical power.",
+  "mNg": "[b]Gas-generator speed (Ng)[/b] of both engines in %. White needle = engine 1, yellow = engine 2. A turboshaft has two separate spools: the gas generator (compressor + its turbine) makes hot gas, and a separate [b]free power turbine[/b] drives the rotor. Ng shows how hard each engine is working: about 66 % at ground idle, 85–90 % in a hover, up to 101 % at maximum. The two needles should sit together.",
+  "mEgt": "[b]Exhaust gas temperature[/b] of both engines in °C (white = 1, yellow = 2). Rises with power. Normal hover is about 700–800 °C, with a limit of about 990 °C. During start, watch for a rapid rise past ~750 °C (hot start): press ABORT.",
+  "mFuel": "Total fuel in [b]kilograms[/b] (the Mi-8 burns about 600–700 kg per hour). LOW FUEL warning below about 270 kg.",
+  "mHyd": "[b]Hydraulic pressure[/b] in kgf/cm². White = main system, yellow = backup. Normal is 45–65. The pumps are on the main gearbox, so pressure only appears once the rotor turns. If both read zero, the flight controls are not boosted and are almost impossible to move.",
+  "mApuT": "[b]APU exhaust temperature[/b]. Rises to about 600 °C during the APU start, then settles near 500 °C while it runs. Red above 720 °C.",
+  "mOilL": "[b]Engine 1 oil pressure[/b] in kgf/cm². Must come up during start; normal 2–4.5.",
+  "mOilR": "[b]Engine 2 oil pressure[/b], same limits as engine 1.",
+  "mMgb": "[b]Main gearbox oil pressure[/b]. The VR-14 gearbox reduces ~15,000 rpm from the engines down to 192 rpm for the rotor; it needs oil pressure 2.5–5 kgf/cm² as soon as the rotor turns.",
+  "mMgbT": "[b]Main gearbox oil temperature[/b] in °C. Warms up slowly; normal 30–90 °C.",
+  "mVolt": "[b]DC bus voltage[/b]. About 24 V on batteries alone, about 28 V when the generators are on line.",
+  "mApuP": "[b]APU air pressure[/b] in kgf/cm²: the compressed air the APU supplies to the engine air starters. Wait for about 2 before pressing ENGINE START."
+ },
+ "g8names": {
+  "mAsi": "AIRSPEED (US-350)",
+  "mAsi2": "AIRSPEED (copilot)",
+  "mAi": "ATTITUDE (AGB-3K)",
+  "mAi2": "ATTITUDE (copilot)",
+  "mAlt": "BAROMETRIC ALTIMETER (VD-10)",
+  "mAlt2": "ALTIMETER (copilot)",
+  "mPitch": "ROTOR PITCH (UShV)",
+  "mNr": "ROTOR RPM (ITE-1)",
+  "mNr2": "ROTOR RPM (copilot)",
+  "mHsi": "HEADING (HSI)",
+  "mHsi2": "HEADING (copilot)",
+  "mVsi": "VERTICAL SPEED (VAR-30)",
+  "mVsi2": "VERTICAL SPEED (copilot)",
+  "mRalt": "RADIO ALTIMETER",
+  "mNg": "GAS GENERATOR RPM Ng (dual)",
+  "mEgt": "EXHAUST GAS TEMP (dual)",
+  "mFuel": "FUEL QUANTITY",
+  "mHyd": "HYDRAULIC PRESSURE (dual)",
+  "mApuT": "APU EXHAUST TEMP",
+  "mOilL": "ENGINE 1 OIL PRESSURE",
+  "mOilR": "ENGINE 2 OIL PRESSURE",
+  "mMgb": "MAIN GEARBOX OIL PRESSURE",
+  "mMgbT": "MAIN GEARBOX OIL TEMP",
+  "mVolt": "DC VOLTMETER",
+  "mApuP": "APU AIR PRESSURE"
+ },
+ "man": "[font_size=22][color=#ffd166][b]R44 Pilot's Manual — how the systems work[/b][/color][/font_size]\n\nA simplified engineering guide to the Robinson R44 as modelled in this simulator. It is for learning only, not a replacement for the real Pilot's Operating Handbook.\n\n[font_size=17][color=#ffd166][b]1 · The drive train: from engine to rotor[/b][/color][/font_size]\n\nThe [b]Lycoming O-540[/b] six-cylinder piston engine lies flat behind the cabin. Its power travels like this:\n\n[b]Engine → lower pulley (sheave) → V-belts → upper sheave → sprag (one-way) clutch → main gearbox → main rotor[/b], with a long drive shaft through the tail boom to the [b]tail rotor[/b] gearbox. Engine and rotor are geared together, which is why the tachometer shows both as a percentage: at 100 % the engine turns about 2,718 rpm and the main rotor about 408 rpm.\n\nThe [b]clutch actuator[/b] is an electric motor that pushes the two sheaves apart and tensions the belts. With the belts slack (DISENGAGED) the engine runs without turning the rotor, so it is easy to start. The [b]sprag clutch[/b] lets the rotor spin faster than the engine but never slower: if the engine quits, the rotor freewheels and you can autorotate.\n\n[diagram:drive]\n[i]Power path from the engine to both rotors.[/i]\n\n[photo:ph0]\n[i]Engine bay, right side: finned cylinders, gold exhaust pipes, the black cooling-fan scroll at the front, and the drive belts rising to the upper sheave under the mast.[/i]\n[photo:ph1]\n[i]Engine from below and behind: the three left-bank cylinders, exhausts and tail-cone attachment.[/i]\n\n[diagram:engine]\n[i]Lycoming O-540 seen from above: six horizontally opposed cylinders (three per side) around one crankshaft.[/i]\n\n[photo:ph2]\n[i]Main rotor head: chrome mast, the two-part swashplate (lower part tilted by the cyclic, upper part spins), pitch links and the teetering hub.[/i]\n[photo:ph3]\n[i]Tail rotor and tail gearbox on the left side of the boom end, with the stabilisers and the tail guard.[/i]\n\n[font_size=17][color=#ffd166][b]2 · Why rotor RPM must stay almost constant[/b][/color][/font_size]\n\nAn aeroplane changes lift by changing speed. A helicopter's rotor runs at a [b]fixed speed[/b] and you change lift by changing the [b]pitch (angle) of the blades[/b] with the collective. Rotor RPM has a narrow safe band:\n\n• [b]Too low[/b] (below ~97 %, LOW RPM horn): lift falls with the square of RPM, the blades must fly at a higher angle to compensate, and below about 80 % they can stall. A stalled rotor cannot be recovered. Robinson rotors are light, so RPM decays fast: about 1–2 s of reaction time.\n\n• [b]Too high[/b] (above ~108 %): the centrifugal loads on the blades and hub exceed design limits.\n\nSo the pilot's job is to [b]change blade pitch (collective) while keeping RPM at 101–102 %[/b]. That is exactly what the throttle, correlator and governor are for.\n\n[font_size=17][color=#ffd166][b]3 · Throttle, correlator and governor[/b][/color][/font_size]\n\n[b]The problem:[/b] raising the collective increases blade pitch → more lift but also more drag → the rotor needs more power → if throttle stays the same, RPM drops. Lowering the collective does the opposite and RPM rises.\n\n[b]The correlator[/b] is a mechanical linkage from the collective to the throttle: raising the collective automatically opens the throttle part of the way. It is a coarse, approximate match.\n\n[b]The governor[/b] is a small electronic controller. It reads engine RPM and, through a motor on the throttle linkage, keeps twisting the throttle grip to hold [b]101–102 %[/b]. It corrects whatever the correlator gets wrong: wind, temperature, altitude, how fast you move the collective. You can feel it turn the grip in your hand and you can overpower it.\n\n[diagram:gov]\n[i]Two helpers move the same throttle: the correlator (a coarse mechanical link) and the governor (a fine electronic correction).[/i]\n\n[bgcolor=#152030][color=#cfe8ff]Example: you are hovering at 102 %. You raise the collective to climb → drag rises → RPM starts to sag to 100 % → the correlator has already opened the throttle a little, and the governor senses the remaining drop and opens it further → RPM returns to 102 %. You never touched the throttle.[/color][/bgcolor]\n\n[b]Why the governor only works above ~80 %:[/b] during start, warm-up and shutdown you deliberately want low RPM. A governor active then would fight you and race the engine to 102 % before the oil is warm or the belts are tensioned. So you set those RPMs by hand, then switch the governor on and roll the throttle open past 80 % where it takes over.\n\n[b]Why 50–60 % for warm-up and clutch engagement:[/b]\n\n• With the clutch disengaged the engine has [b]no load[/b], so even a small throttle opening revs it very high. You hold just a crack of throttle.\n\n• Engaging the clutch at high RPM would snatch the stationary rotor and burn the belts; too low and the engine can stall as the belts take up load. 50–60 % is the gentle middle.\n\n• As the belts tighten, the engine has to drag the rotor up to speed, so RPM tends to fall. You add a little throttle (T) to keep it near 50–70 % until the CLUTCH light goes out (belts fully tensioned).\n\n[font_size=17][color=#ffd166][b]4 · Ignition and magnetos[/b][/color][/font_size]\n\nSpark plugs are fired by two [b]magnetos[/b]: small engine-driven generators, completely independent of the battery. That is why the engine keeps running even with the battery off. Each cylinder has two plugs, one from each magneto, for redundancy and better combustion. The key selects OFF / R / L / BOTH; START also turns the electric starter motor. The [b]mag check[/b] (R, then L, then BOTH) should show only a small RPM drop on each single magneto.\n\n[font_size=17][color=#ffd166][b]5 · Fuel, mixture and carburetor ice[/b][/color][/font_size]\n\nFuel flows from the main and aux tanks through the [b]fuel shut-off valve[/b] to the carburetor. The [b]mixture[/b] control sets the fuel-to-air ratio: full RICH for all ground and flight operations here, and pulled to [b]idle cut-off[/b] to starve and stop the engine. That is the normal way to shut it down, because it leaves no fuel in the cylinders.\n\n[b]Carburetor ice:[/b] air speeding through the carburetor venturi, plus evaporating fuel, can drop its temperature by 20 °C or more. Moisture freezes on the throttle valve and chokes the engine: RPM sags and the governor opens the throttle further to hide it. Keep the [b]CAT gauge out of the yellow arc[/b] (−15 to +5 °C) by pulling [b]carb heat[/b], which feeds warm air from around the exhaust.\n\n[diagram:carb]\n[i]Inside the carburetor: the air speeds up and cools in the narrow venturi, and ice forms on the throttle plate.[/i]\n\n[font_size=17][color=#ffd166][b]6 · Electrical system[/b][/color][/font_size]\n\nThe [b]battery[/b] powers the starter, the clutch actuator, the governor, the electronic tachometers, the engine gauges and the warning lights. The engine-driven [b]alternator[/b] recharges it and carries the load once the engine is above ~50 %. The ALT light shows it is not charging, and the ammeter shows charge (+) or discharge (−). [b]Avionics[/b] stay off during start, because the starter motor causes voltage spikes.\n\n[font_size=17][color=#ffd166][b]7 · Flight controls[/b][/color][/font_size]\n\n[b]Cyclic (mouse):[/b] tilts the swashplate, which changes each blade's pitch as it goes around (more on one side, less on the other). That tilts the whole rotor disc, the thrust tilts with it, and the helicopter accelerates in that direction. Inputs need to be small and smooth; the aircraft responds with a slight delay.\n\n[b]Collective (W/S):[/b] changes the pitch of both blades equally for more or less thrust: up/down, and power.\n\n[b]Pedals (A/D):[/b] change tail-rotor pitch. The main rotor turns counter-clockwise seen from above, so its torque turns the fuselage nose-right. The tail rotor pushes against that, so in a hover you hold left pedal. More power needs more left pedal; in autorotation there is no torque, so you need right pedal.\n\n[b]Teetering rotor:[/b] the R44's two blades are hinged together like a see-saw on top of the mast. Never push the cyclic forward abruptly (low-G): the rotor loses its ability to control the fuselage, which rolls right, and the hub can strike the mast ([b]mast bumping[/b]), which is catastrophic.\n\n[font_size=17][color=#ffd166][b]8 · Things that bite helicopter pilots (all modelled here)[/b][/color][/font_size]\n\n[b]Vortex ring state:[/b] descending vertically faster than ~300 ft/min at low airspeed. The rotor sinks into its own downwash and loses lift, so adding power makes it worse. To escape, push forward into clean air.\n\n[b]Ground effect:[/b] near the ground (less than one rotor diameter) the cushion of air needs less power, so hovering at 3 ft is easier than at 50 ft.\n\n[b]Translational lift:[/b] above about 15–20 kt the rotor flies into undisturbed air and gains efficiency: the helicopter suddenly climbs or needs less power.\n\n[b]Dynamic rollover:[/b] a skid pinned to the ground while the helicopter rolls about it. Beyond about 30° it cannot be stopped, so lift off smoothly and level.\n\n[font_size=17][color=#ffd166][b]9 · Reading the round instruments[/b][/color][/font_size]\n\nEach picture is taken from your cockpit panel right now, so the needles show live values. Turn the battery on to see the electric gauges come alive.\n\n[photo:ph4]\n[i]The panel from the pilot's seat. Top strip: warning lights. Left block: flight and power instruments. Right block: engine gauges. Bottom: switches and ignition key.[/i]\n\n[gguide]\n\n[font_size=17][color=#ffd166][b]10 · Every switch, control and gauge[/b][/color][/font_size]\n[mref]",
+ "man8": "[font_size=22][color=#ffd166][b]Mil Mi-8 Pilot's Manual — how the systems work[/b][/color][/font_size]\n\nA simplified engineering guide to the Mi-8MTV as modelled in this simulator. It is for learning only, not the real flight manual.\n\n[font_size=17][color=#ffd166][b]1 · Meet the Mi-8: what changes from the R44[/b][/color][/font_size]\n\n[b]Weight[/b]\n    About 10.5 t here (13 t maximum), ten times the R44. Everything happens more slowly and needs anticipation.\n\n[b]Rotor[/b]\n    Five blades, 21.3 m across, 192 rpm (shown as 95 %). Articulated: each blade has its own flapping and lead-lag hinges, so there is no mast bumping, and the blades droop visibly when stopped. It turns [b]clockwise[/b] seen from above, the opposite of the R44, so you hold [b]right[/b] pedal in a hover.\n\n[b]Engines[/b]\n    Two turboshafts of about 1,950 hp each instead of one 260 hp piston engine. They are started by compressed air from an APU, not by a key, and they respond with a 1–3 s lag.\n\n[b]Controls[/b]\n    Hydraulically boosted: without hydraulic pressure the controls are almost immovable.\n\n[b]Landing gear[/b]\n    Three wheels (a castoring nose wheel and two mains) instead of skids. It can taxi, and needs a parking brake.\n\n[b]Units[/b]\n    Soviet instruments read kilometres per hour, metres, metres per second, kgf/cm² and °C.\n\n[font_size=17][color=#ffd166][b]2 · Drive train[/b][/color][/font_size]\n\nEach engine drives the [b]VR-14 main gearbox[/b] through its own [b]freewheel (one-way) clutch[/b]. If one engine fails, the other keeps driving and the dead one is simply left behind. The gearbox reduces about 15,000 rpm to 192 rpm for the rotor, sends a long shaft through the tail boom to the tail rotor, and also drives the hydraulic pumps, generators and the big oil-cooler fan on top of the cowling.\n\n[diagram:drive]\n[i]Two engines, one gearbox. Either engine alone can keep the Mi-8 flying at moderate weight.[/i]\n\n[photo:ph0]\n[i]The two engine intakes above the cockpit with their dust-protection domes (MTV version), the cowling and exhaust pipes.[/i]\n[photo:ph1]\n[i]Five-arm articulated rotor head: hinges, swashplate and blade grips. At rest the long blades droop under their own weight.[/i]\n[photo:ph2]\n[i]Tail pylon with the three-blade tail rotor, the tail gearbox and the bumper that protects it during flared landings.[/i]\n[photo:ph3]\n[i]Main wheel on its strut, the external fuel tank above it, and the twin nose wheels.[/i]\n\n[font_size=17][color=#ffd166][b]3 · How a turboshaft engine works[/b][/color][/font_size]\n\nAir is compressed, mixed with fuel and burnt; the hot gas then flows through two separate turbines. The first drives the compressor: together they are the [b]gas generator[/b], and their speed is [b]Ng[/b]. The second, the [b]free power turbine[/b], is not mechanically connected to the first at all. It is spun only by the gas and drives the rotor through the gearbox.\n\n[diagram:turb]\n[i]Gas generator and free turbine: the key to understanding every Mi-8 gauge and procedure.[/i]\n\nSo there are two speeds to watch: [b]Ng[/b] (how hard the engine is working) and [b]Nr[/b] (rotor speed, held constant at 95 %). More power means higher Ng and EGT, while Nr stays the same.\n\n[font_size=17][color=#ffd166][b]4 · Starting: APU, air starter, ignition[/b][/color][/font_size]\n\nA turbine must be spun to about 15–20 % Ng before it can light, which takes far more power than a battery can give. So the Mi-8 first starts its [b]AI-9V APU[/b], a small turbine of its own started electrically. It then uses the APU's compressed air (about 2 kgf/cm²) to drive each engine's [b]air starter[/b].\n\n[bgcolor=#152030][color=#cfe8ff]Start sequence (about 40 s per engine): ENGINE START → the air starter spins the gas generator → at ~15 % Ng fuel and igniters light it → EGT jumps to ~600 °C → the engine accelerates by itself → the starter cuts out at ~55 % → it settles at ground idle (~66 % Ng). Watch EGT (a hot start is a rapid rise past ~750 °C: ABORT) and oil pressure.[/color][/bgcolor]\n\nBecause of the free turbine, the rotor only begins to turn once the gas flow is strong enough, and at ground idle it settles around 60–65 %.\n\n[font_size=17][color=#ffd166][b]5 · Governing: condition levers, correction grip, pitch-gas lever[/b][/color][/font_size]\n\nThe [b]condition levers[/b] (overhead) select STOP / IDLE / AUTO for each engine. In [b]AUTO[/b] each engine's fuel control works as a governor: it measures rotor speed and adds or removes fuel to hold [b]95 %[/b].\n\nThe collective is called the [b]pitch-gas lever[/b] (шаг-газ): raising it increases blade pitch and, through a linkage, also asks the engines for more power. The governors then trim the exact amount, just as the R44's correlator and governor do. The [b]correction[/b] twist grip on the collective limits how much the governors may give. Fully left holds the engines near idle (for the ground), fully right gives them full authority (for flight).\n\n[bgcolor=#152030][color=#cfe8ff]Example: in a hover you raise the collective. The pitch-gas link and the governors increase fuel → Ng climbs from 87 % to 92 % (1–2 s lag) → EGT rises → rotor stays at 95 %. Pull up too fast and the rotor sags briefly because the turbines cannot spool instantly.[/color][/bgcolor]\n\n[font_size=17][color=#ffd166][b]6 · Fuel system[/b][/color][/font_size]\n\nFuel sits in two main side tanks (plus external tanks). [b]Tank pumps[/b] transfer it to a small [b]service tank[/b], from which the [b]service pump[/b] feeds the engines and the APU. Each engine also has a guarded [b]fire cock[/b]: a shut-off valve, closed in a fire or after shutdown. No service pump or a closed fire cock means no start, or a flame-out.\n\n[font_size=17][color=#ffd166][b]7 · Hydraulics[/b][/color][/font_size]\n\nThe 21 m rotor produces aerodynamic forces no human could hold, so hydraulic [b]boosters[/b] move the swashplate while the pilot only moves their control valves. Pumps on the main gearbox make 45–65 kgf/cm² once the rotor turns. If the MAIN system fails, the BACKUP system takes over automatically (amber light). With neither, the cyclic barely moves the rotor. You can try it: leave HYD MAIN off.\n\n[font_size=17][color=#ffd166][b]8 · Electrical system[/b][/color][/font_size]\n\nTwo 24 V batteries start the APU and power systems on the ground. The engine-driven [b]generators[/b] take over at idle (voltmeter ~28 V). The rotor and Ng tachometers have their own little tachometer generators, so they work with no electrical power. The R44's are electric.\n\n[font_size=17][color=#ffd166][b]9 · Flying a 10-tonne helicopter[/b][/color][/font_size]\n\n[b]Inertia:[/b] the Mi-8 takes seconds to start or stop a movement. Make small inputs, wait, and correct early. [b]Turbine lag:[/b] plan power changes ahead of time. [b]Pedals:[/b] right pedal in a hover, because torque yaws the nose left. [b]Speed:[/b] climb at about 120 km/h, cruise at 200–220 km/h, never exceed 250 km/h. [b]Wheels:[/b] release the parking brake before lift-off, and hold it on when landing on a slope. [b]Vortex ring state[/b] and [b]ground effect[/b] work exactly as in the R44, just with bigger numbers.\n\n[font_size=17][color=#ffd166][b]10 · The cockpit[/b][/color][/font_size]\n\n[photo:ph4]\n[i]Main panel: commander's flight instruments on the left, engine and systems gauges in the middle, co-pilot's duplicates on the right, warning lights along the top.[/i]\n[photo:ph5]\n[i]Overhead panel: batteries, generators, hydraulics, lights, the two engine condition levers and the red rotor-brake lever.[/i]\n[photo:ph6]\n[i]Centre console: APU start/stop, the engine start selector and START/ABORT buttons, fuel pumps, fire cocks and the parking brake.[/i]\n\n[font_size=17][color=#ffd166][b]11 · Reading the round instruments[/b][/color][/font_size]\nEach picture is taken from your cockpit right now, so the needles show live values.\n[gguide]\n\n[font_size=17][color=#ffd166][b]12 · Every switch, control and gauge[/b][/color][/font_size]\n[mref]"
+}

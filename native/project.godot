@@ -1,0 +1,25 @@
+; Engine configuration file.
+config_version=5
+
+[application]
+config/name="Helicopter Flying Simulator"
+config/description="Learn every switch, lever and gauge, start the helicopter from cold, then hover and fly."
+config/version="1.0.0"
+run/main_scene="res://main.tscn"
+config/features=PackedStringArray("4.4", "Forward Plus")
+config/icon="res://icon.png"
+config/windows_native_icon="res://icon.ico"
+
+[display]
+window/size/viewport_width=1600
+window/size/viewport_height=900
+window/stretch/aspect="expand"
+
+[rendering]
+
+textures/vram_compression/import_etc2_astc=true
+rendering_device/fallback_to_opengl3=true
+anti_aliasing/quality/msaa_3d=2
+
+[debug]
+gdscript/warnings/inference_on_variant=0
