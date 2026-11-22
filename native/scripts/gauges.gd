@@ -24,8 +24,14 @@ func A(g: Dictionary, v: float) -> float:
 ## dial face: arcs, ticks, numbers, titles
 func dial(g: Dictionary) -> void:
 	var c := P2(g.x, g.y); var Rr: float = g.r * PS
-	draw_circle(c, Rr + 3, Color("0a0b0c")); draw_circle(c, Rr, Color("0b0c0d"))
-	draw_circle(c + Vector2(0, -Rr * .15), Rr * .7, Color(1, 1, 1, .02))
+	# bezel: dark case, machined ring lit from above, inner shadow, then a faintly graded face
+	draw_circle(c, Rr * 1.09, Color("060607"))
+	draw_arc(c, Rr * 1.045, 0, TAU, 64, Color("34363a"), Rr * .07, true)
+	draw_arc(c, Rr * 1.05, -2.5, -.65, 32, Color("7a7d82"), Rr * .03, true)
+	draw_arc(c, Rr * 1.05, .65, 2.5, 32, Color("16171a"), Rr * .03, true)
+	draw_circle(c, Rr * 1.005, Color("010101"))
+	draw_circle(c, Rr * .985, Color("0d0e10"))
+	for i in 5: draw_circle(c + Vector2(0, -Rr * .05 * i), Rr * (.97 - i * .15), Color(1, 1, 1, .011))
 	if not g.has("o") or g.o is not Dictionary: return
 	var o: Dictionary = g.o
 	for ar in o.get("arcs", []):
@@ -35,7 +41,7 @@ func dial(g: Dictionary) -> void:
 	while v <= o.max + 1e-6:
 		var q = (v - o.min) / o.maj; var big := absf(q - roundf(q)) < 1e-3; var a := A(g, v)
 		var d := Vector2(cos(a), sin(a))
-		draw_line(c + d * Rr * .95, c + d * Rr * (.76 if big else .85), Color("eeeeee"), Rr * (.045 if big else .025))
+		draw_line(c + d * Rr * .95, c + d * Rr * (.76 if big else .85), Color("eeeeee"), Rr * (.045 if big else .025), true)
 		v += o.mn
 	var small: bool = g.r <= .03
 	for lv in o.lab:
@@ -55,6 +61,7 @@ func needle(g: Dictionary, a: float, len := .82, w := .05, col := Color("f4f4f4"
 	for i in pts.size(): pts[i] -= Vector2(0, 0)
 	draw_colored_polygon(pts, col)
 	draw_circle(Vector2.ZERO, Rr * .09, Color("222222"))
+	draw_circle(Vector2(-Rr * .02, -Rr * .02), Rr * .04, Color("555555"))
 	draw_set_transform(Vector2.ZERO, 0, Vector2.ONE)
 
 ## "ROTOR %" style annunciator block

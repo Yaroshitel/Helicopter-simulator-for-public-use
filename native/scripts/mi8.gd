@@ -5,6 +5,19 @@ const K8 := [[-7.62, .05, 1.55, 1.32], [-7.52, .46, 1.95, .95], [-7.28, .83, 2.3
 const O8 := {nx = 3.4, nt = 2.4, nb = 4.0}
 const PORTS := [-3.95, -2.75, -1.55, -.35, .85, 2.05]
 const BLI := {cz = -5.8, cy = 2.18, hz = .41, hy = .45, e = 4.5, bul = .17}
+const DOOR := {z0 = -4.5, z1 = -3.42, y0 = 1.0, y1 = 2.5}
+
+## theta (left side) of the door's top and bottom edges on the fuselage section
+func door_th() -> Array:
+	var o := []
+	for y in [DOOR.y1, DOOR.y0]:
+		var a := PI / 2; var b := 1.5 * PI
+		for i in 40:
+			var m := (a + b) / 2
+			if sec_pt(K8, (DOOR.z0 + DOOR.z1) / 2, m, O8).y > y: a = m
+			else: b = m
+		o.append((a + b) / 2)
+	return o
 
 var MM: Node3D; var rT: Node3D; var rS: Node3D; var bl: Array = []; var bz: MeshInstance3D; var sw: Node3D; var tS: Node3D
 var sticks: Array = []; var col: Node3D; var grp_: Node3D; var pd: Array = []; var nav8: Array = []; var bcn: Array = []; var ldgs: Array = []
@@ -17,7 +30,7 @@ var P8: StandardMaterial3D; var OL: StandardMaterial3D
 func _init(s: Sim) -> void:
 	sim = s; _init_mats(); name = "Mi8"
 	model = Node3D.new(); model.position.y = -1.9; add_child(model); MM = model
-	_mats(); _fuselage(); _engines(); _rotor(); _tail(); _gear(); _cockpit()
+	_mats(); _fuselage(); _engines(); _rotor(); _tail(); _gear(); _cockpit(); _details()
 
 func _mats() -> void:
 	var W := 2048; var H := 1024; var rng := RandomNumberGenerator.new(); rng.seed = 8
@@ -35,9 +48,34 @@ func _mats() -> void:
 	for i in 60:
 		var t := (rng.randf() - .5) * .035
 		ell.call(rng.randf() * W, rng.randf() * H, 80 + rng.randf() * 220, 40 + rng.randf() * 120, Color("4f555a").lightened(t) if t > 0 else Color("4f555a").darkened(-t))
-	for u in range(0, W, 96): img.fill_rect(Rect2i(u, 0, 1, H), Color("3f4448"))
-	for v in [.1, .22, .3, .62, .7, .8, .86, .93]: img.fill_rect(Rect2i(0, int((1 - v) * H), W, 1), Color("3f4448"))
-	P8 = StandardMaterial3D.new(); P8.albedo_texture = Gfx.tex(img); P8.roughness = .62; P8.normal_enabled = true; P8.normal_texture = Gfx.nmap(img, .4)
+	for u in range(0, W, 96):
+		img.fill_rect(Rect2i(u, 0, 1, H), Color("3f4448"))
+		for y in range(0, H, 7): img.fill_rect(Rect2i(u + 3, y, 2, 2), Color("5c6267"))
+	for v in [.1, .22, .3, .62, .7, .8, .86, .93]:
+		img.fill_rect(Rect2i(0, int((1 - v) * H), W, 1), Color("3f4448"))
+		for x in range(0, W, 7): img.fill_rect(Rect2i(x, int((1 - v) * H) + 3, 2, 2), Color("5c6267"))
+	# left sliding door (with rails added in 3D), rear clamshell door split
+	var seam := func(z0: float, th0: float, z1: float, th1: float):
+		var n := 80
+		for i in n + 1:
+			var t := float(i) / n
+			var q := uv_of(K8, lerpf(z0, z1, t), lerpf(th0, th1, t), W, H)
+			img.fill_rect(Rect2i(int(q.x), int(q.y), 3, 3), Color("2c3034"))
+	var tt := door_th()
+	seam.call(DOOR.z0, tt[0], DOOR.z1, tt[0]); seam.call(DOOR.z0, tt[1], DOOR.z1, tt[1]); seam.call(DOOR.z0, tt[0], DOOR.z0, tt[1]); seam.call(DOOR.z1, tt[0], DOOR.z1, tt[1])
+	seam.call(2.25, 1.5 * PI, 3.64, 1.5 * PI); seam.call(2.25, 1.12 * PI, 2.25, 1.88 * PI)
+	# exhaust soot along the upper sides behind the engines, dusty belly
+	var nz := Gfx.noise_img(256, .02, 81, 4); nz.resize(W, H)
+	for y in range(0, H, 4):
+		var th := float(y) / H * TAU
+		for x in range(0, W, 4):
+			var u := float(x) / W; var z := lerpf(-7.62, 3.65, .5 - .5 * cos(PI * u))
+			var a := 0.0
+			var up := sin(th)
+			if z > -1.2 and up > .45 and up < .95: a = .35 * U.sstep(-1.2, .2, z) * (1 - U.sstep(2.0, 3.6, z)) * (.5 + nz.get_pixel(x, y).r)
+			if up < -.5: a = maxf(a, .12 * (-up - .5) * 2 * nz.get_pixel(x, y).r)
+			if a > .01: img.fill_rect(Rect2i(x, y, 4, 4), img.get_pixel(x, y).darkened(a))
+	P8 = StandardMaterial3D.new(); P8.albedo_texture = Gfx.tex(img); P8.roughness = .62; P8.normal_enabled = true; P8.normal_texture = Gfx.nmap(img, 1.2); P8.normal_scale = .7
 	P8.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC; P8.clearcoat_enabled = true; P8.clearcoat = .15; P8.clearcoat_roughness = .5
 	OL = Gfx.mat(Color("4b5156"), .62, .05)
 	M.rub = Gfx.mat(Color("141414"), .92); M.soot = Gfx.mat(Color("2e2f30"), .6, .6); M.soot.cull_mode = BaseMaterial3D.CULL_DISABLED; M.gm = Gfx.mat(Color("6d756a"), .45, .7)
@@ -45,7 +83,9 @@ func _mats() -> void:
 	M.g8 = g
 	var gi := StandardMaterial3D.new(); gi.albedo_color = Color(.62, .7, .72, .1); gi.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA; gi.roughness = .05; gi.cull_mode = BaseMaterial3D.CULL_FRONT
 	M.g8i = gi
-	M.inner8 = Gfx.mat(Color("6f7a6a"), .95); M.inner8.cull_mode = BaseMaterial3D.CULL_FRONT
+	M.inner8 = StandardMaterial3D.new(); M.inner8.albedo_color = Color("6c8580"); M.inner8.roughness = .9; M.inner8.cull_mode = BaseMaterial3D.CULL_FRONT
+	M.inner8.normal_enabled = true; M.inner8.normal_texture = M.crinkle.normal_texture; M.inner8.uv1_scale = Vector3(60, 60, 1)
+	var pc := M.crinkle.duplicate() as StandardMaterial3D; pc.albedo_color = Color("3e676a"); M.pan8 = pc
 	M.wall = Gfx.mat(Color("4e6e70"), .8, .05); M.tread = Gfx.mat(Color("8f9396"), .45, .8); M.panel = Gfx.mat(Color("3e676a"), .7)
 
 # ---------- glazing geometry helpers (ported) ----------
@@ -256,12 +296,28 @@ func _gear() -> void:
 
 func _cockpit() -> void:
 	mk(Gfx.box(2.2, .05, 2.3), M.tread, 0, .95, -5.9, null, false)
+	var togm := Gfx.merge([[Gfx.cyl(.008, .008, .006, 10), Gfx.xf(Vector3(0, .003, 0))], [Gfx.cyl(.0025, .003, .022, 6), Gfx.xf(Vector3(0, .014, 0), Vector3(.5, 0, 0))], [Gfx.sphere(.004, 8, 4), Gfx.xf(Vector3(0, .024, .006))]])
+	var knob := Gfx.merge([[Gfx.cyl(.012, .014, .016, 14), Gfx.xf(Vector3(0, .008, 0))], [Gfx.box(.004, .004, .02), Gfx.xf(Vector3(0, .017, 0))]])
 	for sd in [-1, 1]:
-		mk(Gfx.box(.3, .34, 1.2), M.dark, sd * 1.0, 1.26, -5.65)
+		mk(rbox(.32, .34, 1.2, .03), M.pan8, sd * 1.0, 1.26, -5.65)
+		var T := []; var Kn := []
+		for i in 9:
+			for j in 3:
+				var q := {x = sd * 1.0 + (j - 1) * .08, y = 1.43, z = -6.15 + i * .11}
+				if (i + j) % 4 == 3: Kn.append(q)
+				else: T.append(q)
+		Gfx.multi(MM, togm, M.chrome, T, false); Gfx.multi(MM, knob, M.black, Kn, false)
+	var armor := Gfx.mat(Color("4a5a50"), .6, .5)
 	for x in [-.55, .55]:
-		mk(Gfx.box(.56, .13, .52), M.seat, x, 1.35, -5.25)
-		mk(Gfx.box(.56, .78, .12), M.seat, x, 1.8, -4.97).rotation.x = -.1
-		mk(Gfx.box(.3, .18, .09), M.seat, x, 2.32, -4.94)
+		mk(rbox(.56, .1, .52, .04), M.dark, x, 1.27, -5.25)
+		mk(rbox(.52, .12, .48, .05), M.leather, x, 1.36, -5.25)
+		var bk := grp(MM, x, 1.8, -4.97); bk.rotation.x = -.1
+		mk(rbox(.52, .76, .1, .05), M.leather, 0, 0, 0, bk)
+		for yy in [-.2, 0, .2]: mk(Gfx.box(.44, .008, .012), M.black, 0, yy, .05, bk)
+		mk(rbox(.6, 1.0, .03, .012), armor, 0, .1, -.08, bk)
+		mk(rbox(.3, .18, .09, .04), M.leather, x, 2.32, -4.94)
+		for sd in [-1, 1]:
+			mk(Gfx.line_tube(Vector3(x + sd * .12, 2.2, -4.98), Vector3(x + sd * .06, 1.45, -5.45), .025, 4), Gfx.mat(Color("3a4a3c"), .85)).scale = Vector3(1, 1, .3)
 	# cockpit rear bulkhead: follows the fuselage section, with a doorway to the cabin
 	var zb := -4.55; var outl := []
 	for i in 64:
@@ -294,8 +350,11 @@ func _cockpit() -> void:
 	# controls
 	for x in [-.55, .55]:
 		var g := grp(MM, x, .97, -5.85)
-		mk(Gfx.cyl(.022, .03, .64, 12), M.black, 0, .32, 0, g); mk(Gfx.box(.06, .14, .07), M.black, 0, .7, 0, g)
-		mk(Gfx.cyl(.07, .08, .06, 16), M.dark, 0, .03, 0, g)
+		mk(Gfx.cyl(.022, .03, .64, 12), M.black, 0, .32, 0, g)
+		mk(rbox(.065, .16, .075, .025), M.rubber, 0, .71, 0, g)
+		mk(Gfx.cyl(.008, .008, .02, 8), M.red, .0, .79, -.03, g).rotation.x = PI / 2
+		mk(rbox(.022, .012, .02, .005), M.chrome, -.03, .76, -.02, g)
+		mk(Gfx.cyl(.09, .05, .12, 16), M.rubber, 0, .06, 0, g)
 		sticks.append(g)
 	hit("cyc", Vector3(.14, .25, .14), 0, .62, 0, sticks[0])
 	col = grp(MM, -.95, 1.2, -5.15)
@@ -304,24 +363,25 @@ func _cockpit() -> void:
 	mk(Gfx.cyl(.036, .036, .16, 16), M.dark, 0, 0, 0, grp_).rotation.x = PI / 2; mk(Gfx.box(.014, .024, .16), M.red, 0, .036, 0, grp_)
 	hit("coll", Vector3(.1, .1, .4), 0, 0, -.36, col); hit("twist", Vector3(.1, .1, .17), 0, 0, -.74, col)
 	for x in [-.69, -.41]:
-		var p := mk(Gfx.box(.1, .16, .03), M.dark, x, 1.06, -6.12); p.rotation.x = -.5; pd.append(p)
-	for x in [.41, .69]: mk(Gfx.box(.1, .16, .03), M.dark, x, 1.06, -6.12).rotation.x = -.5
+		var p := mk(rbox(.1, .16, .03, .01), M.rubber, x, 1.06, -6.12); p.rotation.x = -.5; pd.append(p)
+	for x in [.41, .69]: mk(rbox(.1, .16, .03, .01), M.rubber, x, 1.06, -6.12).rotation.x = -.5
 	hit("ped", Vector3(.4, .2, .12), -.55, 1.06, -6.12, MM)
 	# panels
 	var mkpan := func(w: float, h: float, pos: Vector3, rx: float, d: Gauges) -> Array:
 		var G := grp(MM, pos.x, pos.y, pos.z); G.rotation.x = rx
 		d.heli = self; d.PS = 1000; draws.append(d)
 		var vp := panel_quad(w, h, 1000, G, d)
-		mk(Gfx.box(w + .04, h + .04, .16), M.dark, 0, 0, -.081, G)
+		mk(rbox(w + .05, h + .05, .16, .02), M.pan8, 0, 0, -.081, G)
 		return [G, vp]
 	_g8()
 	var r := mkpan.call(1.6, .5, Vector3(0, 1.78, -6.25), -.25, Mi8Main.new()); var pnG: Node3D = r[0]; pn8_vp = r[1]
-	mk(Gfx.box(1.7, .04, .22), M.black, 0, .27, .06, pnG)
+	mk(rbox(1.74, .045, .3, .02), M.crinkle, 0, .275, .08, pnG)
 	r = mkpan.call(.6, .46, Vector3(0, 1.28, -5.82), -1.0, Mi8Console.new()); var cnG: Node3D = r[0]; cn8_vp = r[1]
-	mk(Gfx.box(.62, .44, .6), M.dark, 0, -.04, -.32, cnG)
+	mk(rbox(.63, .45, .6, .02), M.pan8, 0, -.04, -.32, cnG)
 	r = mkpan.call(.9, .46, Vector3(0, 2.8, -5.75), PI / 2 - .5, Mi8Overhead.new()); var ohG: Node3D = r[0]; oh8_vp = r[1]
 	for g in G8:
-		mk(Gfx.torus(g.r + .002, .005, 40, 6), M.black, g.x, g.y, .004, pnG).rotation.x = PI / 2
+		mk(Gfx.torus(g.r + .002, .005, 40, 8), M.anod, g.x, g.y, .004, pnG).rotation.x = PI / 2
+		gauge_glass(g.r, g.x, g.y, pnG)
 		hit(g.id, Vector3(g.r * 1.8, g.r * 1.8, .01), g.x, g.y, .009, pnG)
 	hit("mAnn", Vector3(1.5, .034, .01), 0, .205, .006, pnG)
 	var tog := func(pn: Node3D, id: String, x: float, y: float, get: Callable, guard := false):
@@ -383,6 +443,39 @@ func _g8() -> void:
 	sm.call("mMgbT", .05, {min = -50, max = 150, maj = 50, mn = 10, lab = [-50, 50, 150], arcs = [[30, 90, "#2bb24c"], [90, 150, "#dd2222"]], t = "MGB °C"}, "mgbT")
 	sm.call("mVolt", .135, {min = 0, max = 30, maj = 10, mn = 2, lab = [0, 10, 20, 30], arcs = [[24, 29, "#2bb24c"]], t = "DC V"}, "volts")
 	sm.call("mApuP", .23, {min = 0, max = 4, maj = 1, mn = .25, lab = [0, 2, 4], arcs = [[1.5, 2.6, "#2bb24c"]], t = "APU AIR"}, "apuP")
+
+## exterior and cockpit extras: door rails and handle, entry step, tank straps, antennas, cockpit fans, compass
+func _details() -> void:
+	var tt := door_th()
+	for y in [DOOR.y1 + .06, DOOR.y0 - .02]:
+		var pts := PackedVector3Array()
+		for i in 11:
+			var z := lerpf(DOOR.z0 - .05, -1.6, i / 10.0); pts.append(Vector3(-side_x(z, y) - .035, y, z))
+		mk(Gfx.tube(pts, .018, 6), M.steel)
+	mk(rbox(.03, .05, .16, .01), M.chrome, -side_x(DOOR.z1 - .1, 1.75) - .03, 1.75, DOOR.z1 - .1)
+	mk(rbox(.3, .03, .4, .01), M.tread, -1.45, .72, (DOOR.z0 + DOOR.z1) / 2)
+	for z in [DOOR.z0 + .05, DOOR.z1 - .05]: mk(Gfx.line_tube(Vector3(-1.32, .73, z), Vector3(-1.2, 1.0, z), .02, 6), M.steel)
+	for sd in [-1, 1]:
+		for z in [-2.05, -.35]:
+			var st := mk(Gfx.torus(.43, .016, 32, 6), M.steel, sd * 1.62, 1.28, z); st.rotation.x = PI / 2; st.scale = Vector3(.9, 1, 1)
+		mk(Gfx.cyl(.05, .05, .03, 12), M.chrome, sd * 1.62, 1.72, -1.6)
+	for z in [6.2, 7.4]: mk(Gfx.cyl(.004, .008, .9, 6), M.black, 0, 3.55, z).rotation.x = .4
+	for z in [-2.2, .9]: mk(rbox(.015, .18, .22, .006), M.dark, 0, .44, z)
+	for x in [-.5, .5]: mk(Gfx.box(.06, .03, .12), M.dark, x, .43, -4.6)
+	# the classic black cockpit fans in the upper corners of the windscreen
+	for sd in [-1, 1]:
+		var f := grp(MM, sd * .72, 2.42, -6.32); f.rotation = Vector3(-.35, sd * .45, 0)
+		mk(Gfx.cyl(.03, .035, .06, 12), M.black, 0, 0, .04, f).rotation.x = PI / 2
+		for k in 4:
+			var b := mk(Gfx.box(.075, .002, .03), M.dark, 0, 0, -.01, f); b.rotation = Vector3(0, 0, k * PI / 2 + .3); b.position = Vector3(cos(k * PI / 2) * .04, sin(k * PI / 2) * .04, -.01)
+		mk(Gfx.torus(.085, .004, 28, 4), M.black, 0, 0, -.02, f).rotation.x = PI / 2
+		for k in 3: mk(Gfx.box(.17, .003, .003), M.black, 0, 0, -.025, f).rotation.z = k * PI / 3
+		mk(Gfx.line_tube(Vector3(0, 0, .07), Vector3(0, .09, .14), .008, 6), M.black, 0, 0, 0, f)
+	# KI-13 standby compass on the windscreen centre post
+	var cg := grp(MM, .25, 2.09, -6.2)
+	mk(Gfx.box(.02, .06, .02), M.black, 0, -.03, 0, cg)
+	mk(Gfx.sphere(.035, 16, 8), M.black, 0, .02, 0, cg)
+	mk(Gfx.cyl(.022, .022, .01, 16), Gfx.mat(Color("d8d2c0"), .5), 0, .02, .032, cg).rotation.x = PI / 2
 
 func animate(dt: float, t: float) -> void:
 	var F := sim; var S := sim.S; var C := sim.C; var rr := F.Om / F.Om0

@@ -195,3 +195,41 @@ static func line_tube(a: Vector3, b: Vector3, r: float, seg := 8) -> ArrayMesh:
 	elif dir.y < 0:
 		basis = Basis(Vector3.RIGHT, PI)
 	return merge([[c, Transform3D(basis, mid)]])
+
+## extruded 2D outline: pts are [z, y] pairs, thickness d along x (centred)
+static func extrude(pts: Array, d: float, x0 := 0.0) -> ArrayMesh:
+	var poly := PackedVector2Array()
+	for p in pts: poly.append(Vector2(p[0], p[1]))
+	var tri := Geometry2D.triangulate_polygon(poly)
+	if tri.is_empty():
+		poly.reverse(); tri = Geometry2D.triangulate_polygon(poly)
+	var st := SurfaceTool.new(); st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var ccw := 0.0
+	for i in poly.size(): ccw += poly[i].x * poly[(i + 1) % poly.size()].y - poly[(i + 1) % poly.size()].x * poly[i].y
+	for s in [-1, 1]:
+		for k in range(0, tri.size(), 3):
+			var idx := [tri[k], tri[k + 1], tri[k + 2]] if (s > 0) == (ccw > 0) else [tri[k], tri[k + 2], tri[k + 1]]
+			for ii in idx:
+				st.set_uv(poly[ii] / 2.0); st.add_vertex(Vector3(x0 + s * d / 2, poly[ii].y, poly[ii].x))
+	for i in poly.size():
+		var a := poly[i]; var b := poly[(i + 1) % poly.size()]
+		var q := [Vector3(x0 - d / 2, a.y, a.x), Vector3(x0 + d / 2, a.y, a.x), Vector3(x0 + d / 2, b.y, b.x), Vector3(x0 - d / 2, b.y, b.x)]
+		var ids := [0, 2, 1, 0, 3, 2] if ccw > 0 else [0, 1, 2, 0, 2, 3]
+		for ii in ids:
+			st.set_uv(Vector2(q[ii].x, q[ii].z)); st.add_vertex(q[ii])
+	st.generate_normals()
+	return st.commit()
+
+## a passenger car (front = +z): [painted body, glass, tyres + trim]
+static func car_meshes() -> Array:
+	var body := merge([[extrude([[-2.22, .34], [-2.27, .72], [-2.08, .97], [-1.5, 1.03], [.95, 1.03], [2.0, .9], [2.27, .68], [2.22, .34], [1.65, .3], [1.38, .58], [1.1, .3], [-1.1, .3], [-1.38, .58], [-1.65, .3]], 1.78), Transform3D()],
+		[box(1.48, .05, 1.32), xf(Vector3(0, 1.43, -.37))]])
+	var glass := merge([[extrude([[-1.5, 1.0], [-1.08, 1.41], [.32, 1.43], [.93, 1.0]], 1.6), Transform3D()],
+		[box(.32, .1, .04), xf(Vector3(-.62, .78, 2.25))], [box(.32, .1, .04), xf(Vector3(.62, .78, 2.25))]])
+	var trim := []
+	for z in [-1.38, 1.38]:
+		for x in [-.8, .8]:
+			trim.append([cyl(.33, .33, .22, 14), xf(Vector3(x, .33, z), Vector3(0, 0, PI / 2))])
+	trim.append([box(1.8, .16, .12), xf(Vector3(0, .42, 2.24))]); trim.append([box(1.8, .16, .12), xf(Vector3(0, .42, -2.24))])
+	trim.append([box(1.5, .1, .04), xf(Vector3(0, .8, -2.25))])
+	return [body, glass, merge(trim)]

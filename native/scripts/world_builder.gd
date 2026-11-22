@@ -18,7 +18,8 @@ func G(x: float, z: float) -> float: return U.ground_h(x, z)
 func build() -> Node3D:
 	rng.seed = 7
 	root = Node3D.new(); root.name = "World"
-	_terrain(); _airfield(); _water(); _clouds(); _town()
+	excl = Image.create(EXN, EXN, false, Image.FORMAT_L8); excl.fill(Color.WHITE)
+	_terrain(); _airfield(); _water(); _town(); _grass()
 	root.set_meta("night_lights", night_lights); root.set_meta("night_windows", night_windows)
 	root.set_meta("traffic", traffic); root.set_meta("smoke", smoke_src)
 	_own(root, root)
@@ -30,15 +31,32 @@ func _own(n: Node, owner_: Node) -> void:
 
 # ---------------- textures ----------------
 var _T := {}
-func grass_img() -> Image:
-	if not _T.has("grass"): _T.grass = Gfx.noise_img(512, .04, 3, 6, .62, 1.0)
-	return _T.grass
 func conc_img() -> Image:
 	if not _T.has("conc"):
-		var img := Gfx.noise_img(512, .09, 5, 4, .55, .8)
-		var j := Color(.36, .35, .33)
+		# 8 × 8 slabs, each its own tone, fine aggregate, dark joints, a few hairline cracks and patched corners
+		var r := RandomNumberGenerator.new(); r.seed = 55
+		var nz := Gfx.noise_img(512, .09, 5, 4)
+		var nf := Gfx.noise_img(512, .45, 9, 2)
+		var tone := []
+		for k in 64: tone.append(r.randf_range(.86, 1.06))
+		var img := Image.create(512, 512, false, Image.FORMAT_RGBA8)
+		for y in 512:
+			for x in 512:
+				var t: float = tone[(y / 64) * 8 + x / 64]
+				var v := (.58 + .16 * nz.get_pixel(x, y).r + .08 * nf.get_pixel(x, y).r) * t
+				img.set_pixel(x, y, Color(v, v * .985, v * .955))
+		var j := Color(.3, .29, .27)
 		for i in 9:
 			img.fill_rect(Rect2i(i * 64 - 1, 0, 2, 512), j); img.fill_rect(Rect2i(0, i * 64 - 1, 512, 2), j)
+		for c in 14:
+			var p := Vector2(r.randf() * 512, r.randf() * 512); var d := Vector2.from_angle(r.randf() * TAU)
+			for k in r.randi_range(20, 70):
+				d = d.rotated(r.randf_range(-.5, .5)); p += d
+				var q := Vector2i(posmod(int(p.x), 512), posmod(int(p.y), 512))
+				img.set_pixelv(q, img.get_pixelv(q).darkened(.35))
+		for c in 5:
+			var q := Vector2i(r.randi_range(0, 7) * 64 + 4, r.randi_range(0, 7) * 64 + 4); var v := r.randf_range(.45, .52)
+			img.fill_rect(Rect2i(q, Vector2i(r.randi_range(14, 30), r.randi_range(10, 24))), Color(v, v, v * .97))
 		_T.conc = img
 	return _T.conc
 
@@ -49,15 +67,29 @@ func night_light(col: Color, pts: Array, r := .11) -> void:
 	Gfx.multi(root, Gfx.cyl(.06, .08, .25, 8), Gfx.mat(Gfx.hexc(0x3a3d40), .5, .6), pts.map(func(p): return {x = p.x, y = p.y - .17, z = p.z}), false)
 
 # ---------------- terrain ----------------
+## tiling noise textures shared by the ground shaders (C++ noise, generated once)
+func noise_tex(k: String) -> Texture2D:
+	if not _T.has("nt_" + k):
+		match k:
+			"a": _T["nt_a"] = Gfx.tex(Gfx.noise_img(512, .016, 41, 5))
+			"b": _T["nt_b"] = Gfx.tex(Gfx.noise_img(512, .011, 43, 4))
+			"n": _T["nt_n"] = Gfx.nmap(Gfx.noise_img(512, .035, 47, 5), 5.0)
+	return _T["nt_" + k]
+
+func decal(img: Image, rough := .85, nstr := 1.0, tint := Color.WHITE, layer := 1.0, uvs := Vector2.ONE, grime := .3) -> ShaderMaterial:
+	var m := ShaderMaterial.new(); m.shader = load("res://shaders/world/ground_decal.gdshader")
+	m.set_shader_parameter("albedo_tex", Gfx.tex(img)); m.set_shader_parameter("normal_tex", Gfx.nmap(img, maxf(nstr, .01) * 2.0))
+	m.set_shader_parameter("noise_tex", noise_tex("b")); m.set_shader_parameter("tint", tint); m.set_shader_parameter("rough", rough)
+	m.set_shader_parameter("normal_depth", 1.0 if nstr > 0 else 0.0); m.set_shader_parameter("layer", layer); m.set_shader_parameter("uv_scale", uvs)
+	m.set_shader_parameter("grime", grime)
+	return m
+
 func _terrain() -> void:
 	var n := U.TN + 1; var step := U.TS / U.TN
 	U.load_height()
 	var H := U._h
-	var cb := FileAccess.get_file_as_bytes("res://baked/color.bin")
 	var P := PackedVector3Array(); P.resize(n * n)
 	var N := PackedVector3Array(); N.resize(n * n)
-	var Cc := PackedColorArray(); Cc.resize(n * n)
-	var UV := PackedVector2Array(); UV.resize(n * n)
 	for j in n:
 		for i in n:
 			var k := j * n + i
@@ -66,8 +98,6 @@ func _terrain() -> void:
 			var hx := H[j * n + mini(i + 1, n - 1)] - H[j * n + maxi(i - 1, 0)]
 			var hz := H[mini(j + 1, n - 1) * n + i] - H[maxi(j - 1, 0) * n + i]
 			N[k] = Vector3(-hx, 2 * step, -hz).normalized()
-			Cc[k] = Color8(cb[k * 3], cb[k * 3 + 1], cb[k * 3 + 2])
-			UV[k] = Vector2(x / 20.0, z / 20.0)
 	var I := PackedInt32Array(); I.resize(U.TN * U.TN * 6)
 	var c := 0
 	for j in U.TN:
@@ -75,19 +105,30 @@ func _terrain() -> void:
 			var a := j * n + i; var b := a + 1; var d := a + n; var e := d + 1
 			I[c] = a; I[c + 1] = e; I[c + 2] = d; I[c + 3] = a; I[c + 4] = b; I[c + 5] = e; c += 6
 	var arr := []; arr.resize(Mesh.ARRAY_MAX)
-	arr[Mesh.ARRAY_VERTEX] = P; arr[Mesh.ARRAY_NORMAL] = N; arr[Mesh.ARRAY_COLOR] = Cc; arr[Mesh.ARRAY_TEX_UV] = UV; arr[Mesh.ARRAY_INDEX] = I
+	arr[Mesh.ARRAY_VERTEX] = P; arr[Mesh.ARRAY_NORMAL] = N; arr[Mesh.ARRAY_INDEX] = I
 	var am := ArrayMesh.new(); am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
-	var m := Gfx.textured(grass_img(), .97, 3.0)
-	m.vertex_color_use_as_albedo = true
+	var m := ShaderMaterial.new(); m.shader = load("res://shaders/world/terrain.gdshader")
+	var cimg := Image.create_from_data(n, n, false, Image.FORMAT_RGB8, FileAccess.get_file_as_bytes("res://baked/color.bin"))
+	var mb := FileAccess.get_file_as_bytes("res://baked/mask.bin")
+	if mb.size() != n * n * 4:
+		mb = PackedByteArray(); mb.resize(n * n * 4)
+	var mimg := Image.create_from_data(n, n, false, Image.FORMAT_RGBA8, mb)
+	height_tex = ImageTexture.create_from_image(Image.create_from_data(n, n, false, Image.FORMAT_RF, H.to_byte_array()))
+	m.set_shader_parameter("color_map", ImageTexture.create_from_image(cimg)); m.set_shader_parameter("mask_map", ImageTexture.create_from_image(mimg))
+	m.set_shader_parameter("height_map", height_tex)
+	m.set_shader_parameter("noise_a", noise_tex("a")); m.set_shader_parameter("noise_b", noise_tex("b")); m.set_shader_parameter("detail_n", noise_tex("n"))
 	var t := Gfx.mi(root, am, m, Vector3.ZERO, Vector3.ZERO, false); t.name = "Terrain"
+	root.set_meta("terrain_mat", m); root.set_meta("height_tex", height_tex)
+var height_tex: ImageTexture
 
-func flat(w: float, d: float, img: Image, x: float, y: float, z: float, rep := Vector2.ONE, ry := 0.0, nstr := 2.0, tint := Color.WHITE) -> MeshInstance3D:
-	var m := Gfx.textured(img, .88, nstr, tint)
+func flat(w: float, d: float, img: Image, x: float, y: float, z: float, rep := Vector2.ONE, ry := 0.0, nstr := 2.0, tint := Color.WHITE, layer := 1.0, rough := .88) -> MeshInstance3D:
+	var m := decal(img, rough, nstr, tint, layer)
 	return Gfx.mi(root, Gfx.plane(w, d, rep), m, Vector3(x, y, z), Vector3(0, ry, 0), false)
 
 # ---------------- airfield ----------------
 func _airfield() -> void:
-	flat(90, 90, conc_img(), 0, .01, 0, Vector2(90 / 18.0, 90 / 18.0), 0, 2.0, Color(.78, .77, .75))
+	ex_rect(-46, -46, 46, 46); ex_rect(-311, -186, 311, -154); ex_rect(-64, 28, -32, 52); ex_rect(34, 40, 46, 50); ex_rect(58, 18, 66, 26); ex_rect(-25, 48, -15, 52)
+	flat(90, 90, conc_img(), 0, .01, 0, Vector2(90 / 18.0, 90 / 18.0), 0, 2.0, Color(.84, .83, .8), 1.0)
 	# helipad: concrete, white ring + H, yellow outer ring
 	var pad := conc_img().duplicate() as Image
 	pad.resize(1024, 1024)
@@ -103,7 +144,14 @@ func _airfield() -> void:
 	var wh := Color(.94, .94, .92)
 	ring.call(427.0, 453.0, wh); ring.call(463.0, 477.0, Color(.9, .76, .1))
 	pad.fill_rect(Rect2i(330, 280, 70, 464), wh); pad.fill_rect(Rect2i(624, 280, 70, 464), wh); pad.fill_rect(Rect2i(400, 476, 224, 70), wh)
-	flat(26, 26, pad, 0, .02, 0, Vector2.ONE, 0, 2.0, Color(.82, .81, .79))
+	flat(26, 26, pad, 0, .02, 0, Vector2.ONE, 0, 2.0, Color(.88, .87, .85), 2.0)
+	# taxiway from the apron to the runway, painted lead-in lines
+	flat(14, 112, conc_img(), 0, .01, -100, Vector2(14 / 18.0, 112 / 18.0), 0, 2.0, Color(.84, .83, .8), 1.0)
+	ex_rect(-8, -156, 8, -44)
+	var ylw := Image.create(8, 8, false, Image.FORMAT_RGBA8); ylw.fill(Color(.92, .74, .12))
+	var ym := decal(ylw, .6, 0.0, Color.WHITE, 3.0, Vector2.ONE, .45)
+	for L in [[Vector2(0, -14.5), Vector2(0, -150)], [Vector2(-12, 0), Vector2(-30, 0), Vector2(-48, 12), Vector2(-48, 28)]]:
+		strip(L, .3, .0, ym, 2.0)
 	# asphalt runway with markings
 	var rw := Gfx.noise_img(256, .12, 9, 4, .18, .3)
 	var rwy := Image.create(128, 1024, false, Image.FORMAT_RGBA8)
@@ -116,7 +164,7 @@ func _airfield() -> void:
 	rwy.fill_rect(Rect2i(4, 0, 3, 1024), mk); rwy.fill_rect(Rect2i(121, 0, 3, 1024), mk)
 	for kk in 8:
 		rwy.fill_rect(Rect2i(12 + kk * 13, 8, 8, 65), mk); rwy.fill_rect(Rect2i(12 + kk * 13, 1024 - 73, 8, 65), mk)
-	flat(30, 620, rwy, 0, .015, -170, Vector2.ONE, PI / 2, 1.5)
+	flat(30, 620, rwy, 0, .015, -170, Vector2.ONE, PI / 2, 1.5, Color.WHITE, 1.0, .8)
 	# hangar, building, windsock
 	var corr := Image.create(256, 32, false, Image.FORMAT_RGBA8)
 	for x in 256:
@@ -179,6 +227,11 @@ func roof_m() -> StandardMaterial3D:
 
 # ---------------- water ----------------
 func _water() -> void:
+	var rp := []
+	var zz := -4450.0
+	while zz <= 4450: rp.append(Vector2(U.river_x(zz), zz)); zz += 10
+	ex_line(rp, 116)
+	for a in 64: ex_rect(U.LAKE.x + cos(a / 64.0 * TAU) * 95 - 95, U.LAKE.z + sin(a / 64.0 * TAU) * 95 - 95, U.LAKE.x + cos(a / 64.0 * TAU) * 95 + 95, U.LAKE.z + sin(a / 64.0 * TAU) * 95 + 95)
 	var st := SurfaceTool.new(); st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var prev := []
 	var z := -4450.0
@@ -193,31 +246,11 @@ func _water() -> void:
 		var a0 := TAU * i / seg; var a1 := TAU * (i + 1) / seg
 		for vv in [Vector3(U.LAKE.x, 0, U.LAKE.z), Vector3(U.LAKE.x + cos(a1) * U.LAKE_R, 0, U.LAKE.z + sin(a1) * U.LAKE_R), Vector3(U.LAKE.x + cos(a0) * U.LAKE_R, 0, U.LAKE.z + sin(a0) * U.LAKE_R)]:
 			st.set_normal(Vector3.UP); st.set_uv(Vector2(vv.x, vv.z) / 50.0); st.add_vertex(vv)
-	var sh := ShaderMaterial.new(); sh.shader = load("res://shaders/water.gdshader")
-	var nimg := Gfx.noise_img(256, .05, 11, 3)
-	sh.set_shader_parameter("normal_tex", Gfx.nmap(nimg, 3))
+	var sh := ShaderMaterial.new(); sh.shader = load("res://shaders/world/water.gdshader")
+	var nimg := Gfx.noise_img(512, .03, 11, 4)
+	sh.set_shader_parameter("normal_tex", Gfx.nmap(nimg, 6))
+	sh.set_shader_parameter("foam_tex", noise_tex("a"))
 	var w := Gfx.mi(root, st.commit(), sh, Vector3(0, U.WATER_Y, 0), Vector3.ZERO, false); w.name = "Water"
-
-func _clouds() -> void:
-	var img := Image.create(128, 128, false, Image.FORMAT_RGBA8)
-	img.fill(Color(1, 1, 1, 0))
-	for i in 26:
-		var cx := 30 + rnd() * 68; var cy := 45 + rnd() * 35; var r := 12 + rnd() * 22
-		for y in range(int(cy - r), int(cy + r)):
-			for x in range(int(cx - r), int(cx + r)):
-				if x < 0 or y < 0 or x > 127 or y > 127: continue
-				var d := Vector2(x - cx, y - cy).length() / r
-				if d < 1:
-					var c := img.get_pixel(x, y); c.a = minf(1, c.a + .55 * (1 - d) * (1 - d)); img.set_pixel(x, y, c)
-	var m := StandardMaterial3D.new(); m.albedo_texture = Gfx.tex(img); m.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	m.billboard_mode = BaseMaterial3D.BILLBOARD_ENABLED; m.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED; m.depth_draw_mode = BaseMaterial3D.DEPTH_DRAW_DISABLED
-	m.billboard_keep_scale = true; m.disable_fog = true
-	var cl := Node3D.new(); cl.name = "Clouds"; root.add_child(cl); cl.set_meta("mat", m)
-	var q := QuadMesh.new(); q.size = Vector2(1, 1)
-	for i in 70:
-		var a := rnd() * TAU; var r := 900 + rnd() * 4000
-		var o := Gfx.mi(cl, q, m, Vector3(cos(a) * r, 700 + rnd() * 500, sin(a) * r), Vector3.ZERO, false)
-		o.scale = Vector3(700 + rnd() * 600, 350, 1)
 
 # ---------------- town ----------------
 const CARC := [Color("e8e8e8"), Color("b8bcc0"), Color("202428"), Color("9a1c1c"), Color("1d3d7a"), Color("d8cfa8"), Color("4c5a3c"), Color("6b6f74"), Color("f2f2f0")]
@@ -234,6 +267,7 @@ func facade(base: Color, floors: int, bays: int, o := {}) -> StandardMaterial3D:
 	var seam := base.darkened(.25)
 	for f in floors + 1: img.fill_rect(Rect2i(0, f * fh - 1, W, 1), seam)
 	for b in bays + 1: img.fill_rect(Rect2i(b * bw - 1, 0, 1, H), seam)
+	var rimg := Image.create(W, H, false, Image.FORMAT_RGBA8); rimg.fill(Color(.88, .88, .88))
 	var frame: Color = o.get("frame", Color(.92, .92, .9))
 	var lit := [Color("ffc884"), Color("ffe0aa"), Color("fff2d8"), Color("b8d0ff"), Color("ffb46c")]
 	for f in floors:
@@ -243,6 +277,7 @@ func facade(base: Color, floors: int, bays: int, o := {}) -> StandardMaterial3D:
 			img.fill_rect(Rect2i(x - 2, y - 2, ww + 4, wh + 4), frame)
 			img.fill_rect(Rect2i(x, y, ww, wh), Color(.29, .23, .17) if door else Color(.17, .22, .27))
 			img.fill_rect(Rect2i(x, y + wh / 2, ww, wh / 2), Color(.25, .2, .15) if door else Color(.3, .36, .42))
+			rimg.fill_rect(Rect2i(x, y, ww, wh), Color(.45, .45, .45) if door else Color(.05, .05, .05))
 			if door: continue
 			img.fill_rect(Rect2i(x + ww / 2 - 1, y, 2, wh), frame); img.fill_rect(Rect2i(x, y + 10, ww, 1), frame)
 			if rnd() < .45: img.fill_rect(Rect2i(x + 1, y + 12, ww / 2 - 3, wh - 13), pick([Color(.88, .8, .65), Color(.67, .24, .22), Color(.96, .96, .92), Color(.37, .49, .67)]))
@@ -255,23 +290,22 @@ func facade(base: Color, floors: int, bays: int, o := {}) -> StandardMaterial3D:
 		img.fill_rect(Rect2i(rng.randi() % W, rng.randi() % H, 1 + rng.randi() % 2, 10 + rng.randi() % 50), base.darkened(.08 + rnd() * .08))
 	var m := StandardMaterial3D.new(); m.albedo_texture = Gfx.tex(img); m.roughness = .85
 	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
-	m.emission_enabled = true; m.emission_texture = Gfx.tex(em); m.emission = Color.WHITE; m.emission_energy_multiplier = 0
+	m.emission_enabled = true; m.emission_texture = Gfx.tex(em); m.emission = Color.BLACK; m.emission_energy_multiplier = 0
 	m.normal_enabled = true; m.normal_texture = Gfx.nmap(img, 1.5)
+	m.roughness_texture = Gfx.tex(rimg); m.roughness = 1.0; m.metallic_specular = .6
 	night_windows.append([m, 1.5])
 	return m
 
 func road_y(x: float, z: float) -> float:
 	return maxf(G(x, z), 1.4 if absf(x - U.river_x(z)) < 78 else -1e9)
 
-func asph(dash: bool) -> StandardMaterial3D:
+func asph(dash: bool) -> ShaderMaterial:
 	var a := Gfx.noise_img(128, .1, 21 if dash else 22, 4, .18, .3)
 	var img := Image.create(64, 128, false, Image.FORMAT_RGBA8); img.blit_rect(a, Rect2i(0, 0, 64, 128), Vector2i.ZERO)
 	var c := Color(.85, .85, .83)
 	img.fill_rect(Rect2i(2, 0, 2, 128), c); img.fill_rect(Rect2i(60, 0, 2, 128), c)
 	if dash: img.fill_rect(Rect2i(31, 0, 2, 60), c)
-	var m := Gfx.textured(img, .85, 1.5)
-	m.render_priority = 1
-	return m
+	return decal(img, .82, 1.5, Color.WHITE, 3.0, Vector2.ONE, .35)
 
 ## ribbon draped on the ground along pts (x,z pairs)
 func strip(pts: Array, width: float, y_off: float, m: Material, step := 4.0, off := 0.0, vlen := 8.0, rail := false) -> Array:
@@ -280,6 +314,7 @@ func strip(pts: Array, width: float, y_off: float, m: Material, step := 4.0, off
 		var a: Vector2 = pts[i]; var b: Vector2 = pts[i + 1]; var n := maxi(1, ceili(a.distance_to(b) / step))
 		for k in n: P.append(a.lerp(b, float(k) / n))
 	P.append(pts[-1])
+	ex_line(P, width + 1.5)
 	var st := SurfaceTool.new(); st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var acc := 0.0; var rows := []
 	for i in P.size():
@@ -301,14 +336,15 @@ func strip(pts: Array, width: float, y_off: float, m: Material, step := 4.0, off
 	return P
 
 func park(L: Array) -> void:
-	var body := Gfx.merge([[Gfx.box(1.8, .75, 4.3), Gfx.xf(Vector3(0, .62, 0))]])
-	var top := Gfx.merge([[Gfx.box(1.6, .62, 2.2), Gfx.xf(Vector3(0, 1.28, -.2))],
-		[Gfx.cyl(.33, .33, .24, 12), Gfx.xf(Vector3(-.82, .33, 1.35), Vector3(0, 0, PI / 2))], [Gfx.cyl(.33, .33, .24, 12), Gfx.xf(Vector3(.82, .33, 1.35), Vector3(0, 0, PI / 2))],
-		[Gfx.cyl(.33, .33, .24, 12), Gfx.xf(Vector3(-.82, .33, -1.35), Vector3(0, 0, PI / 2))], [Gfx.cyl(.33, .33, .24, 12), Gfx.xf(Vector3(.82, .33, -1.35), Vector3(0, 0, PI / 2))]])
 	if not _T.has("car"):
-		_T.car = [body, top, Gfx.mat(Color.WHITE, .25, .6), Gfx.mat(Gfx.hexc(0x15181c), .15, .3)]
-	Gfx.multi(root, _T.car[0], _T.car[2], L)
-	Gfx.multi(root, _T.car[1], _T.car[3], L.map(func(q): return {x = q.x, y = q.y, z = q.z, ry = q.ry}))
+		var paint := Gfx.mat(Color.WHITE, .22, .35); paint.clearcoat_enabled = true; paint.clearcoat = .6
+		var glass := Gfx.mat(Gfx.hexc(0x101418), .06, .4)
+		_T.car = [Gfx.car_meshes(), paint, glass, Gfx.mat(Gfx.hexc(0x1a1b1d), .8, .1)]
+	var cm: Array = _T.car[0]
+	var plain := L.map(func(q): return {x = q.x, y = q.y, z = q.z, ry = q.ry})
+	Gfx.multi(root, cm[0], _T.car[1], L).visibility_range_end = 1800
+	Gfx.multi(root, cm[1], _T.car[2], plain).visibility_range_end = 1800
+	Gfx.multi(root, cm[2], _T.car[3], plain, false).visibility_range_end = 900
 
 func _town() -> void:
 	var A1 := 1000.0; var A2 := 1260.0; var CS := [-820.0, -580.0, -340.0, -100.0, 140.0, 380.0]; var ZN := -1000.0; var ZS := 1000.0
@@ -320,7 +356,7 @@ func _town() -> void:
 	var ROADS := [{p = [Vector2(A1, -1150), Vector2(A1, ZS)], w = 12.0, m = roadM}, {p = [Vector2(A2, ZN), Vector2(A2, ZS)], w = 12.0, m = roadM},
 		{p = riv, w = 10.0, m = roadM}, {p = acc_r, w = 10.0, m = roadM}]
 	for cz in CS: ROADS.append({p = [Vector2(790, cz), Vector2(1470, cz)], w = 9.0, m = streetM, y = .03})
-	for r in ROADS: r.P = strip(r.p, r.w, .22 + r.get("y", 0.0), r.m)
+	for r in ROADS: r.P = strip(r.p, r.w, .1 + r.get("y", 0.0), r.m)
 	# bridge
 	var cm := Gfx.mat(Gfx.hexc(0xa9a69e), .85)
 	var B: Array = ROADS[3].P.filter(func(pp): return absf(pp.x - U.river_x(pp.y)) < 80)
@@ -332,7 +368,7 @@ func _town() -> void:
 	# railway: ballast + rails, freight train by the plant
 	var bal := Gfx.noise_img(128, .2, 31, 3, .4, .55)
 	for y in range(4, 128, 16): bal.fill_rect(Rect2i(15, y, 98, 7), Color(.29, .23, .17))
-	var balm := Gfx.textured(bal, .95, 2.0); balm.render_priority = 1
+	var balm := decal(bal, .95, 2.0, Color.WHITE, 2.0, Vector2.ONE, .2)
 	var rP := []
 	z = -3600.0
 	while z <= 3600: rP.append(Vector2(U.rail_x(z), z)); z += 20
@@ -426,8 +462,20 @@ func _town() -> void:
 	var ho := Gfx.multi(root, hg, null, houses)
 	var rg := Gfx.cyl(0, 1, 1, 4, true)
 	var rmesh := Gfx.merge([[rg, Gfx.xf(Vector3(0, .5, 0), Vector3(0, PI / 4, 0))]])
-	var rm := Gfx.mat(Color.WHITE, .55, .55); rm.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var tiles := Image.create(64, 64, false, Image.FORMAT_RGBA8)
+	for y in 64:
+		for x in 64:
+			var row := y % 8; var col := (x + (4 if (y / 8) % 2 else 0)) % 8
+			var v := .78 + .2 * sin(row / 8.0 * PI) - (.3 if row == 7 else 0.0) - (.12 if col == 0 else 0.0) + .06 * sin(float((x / 8) * 13 + (y / 8) * 7))
+			tiles.set_pixel(x, y, Color(v, v, v))
+	var rm := Gfx.textured(tiles, .7, 3.0); rm.cull_mode = BaseMaterial3D.CULL_DISABLED; rm.uv1_scale = Vector3(8, 5, 1); rm.vertex_color_use_as_albedo = true
 	Gfx.multi(root, rmesh, rm, roofs)
+	var chim := []
+	for i in houses.size():
+		if i % 5 < 3:
+			var hq: Dictionary = houses[i]; var o := Vector2(2.4 * hq.sx, 1.6).rotated(-hq.ry)
+			chim.append({x = hq.x + o.x, y = hq.y + 6 * hq.sy, z = hq.z + o.y, ry = hq.ry})
+	Gfx.multi(root, Gfx.merge([[Gfx.box(.6, 3.2, .6), Gfx.xf(Vector3(0, 1.6, 0))], [Gfx.box(.75, .15, .75), Gfx.xf(Vector3(0, 3.2, 0))]]), Gfx.mat(Color("8a5a48"), .9), chim)
 	# streetlights and parked cars; moving traffic lanes
 	for r in ROADS:
 		var P: Array = r.P
@@ -468,17 +516,14 @@ func _town() -> void:
 	var TL := []
 	for t in tr:
 		if absf(t.x - U.river_x(t.z)) > 44:
-			TL.append({x = t.x, y = G(t.x, t.z) - .2, z = t.z, ry = rnd() * 6, sx = t.s, sy = t.s * R(.85, 1.2), sz = t.s, c = Color.from_hsv(R(.2, .3), R(.35, .55), R(.2, .34))})
-	var crown_parts := []
-	for i in 3:
-		var ox: float = [0.0, .7, -.6][i]; var oy: float = [0.0, -.35, -.25][i]; var oz: float = [0.0, .3, -.5][i]; var s: float = [1.0, .75, .7][i]
-		crown_parts.append([Gfx.sphere(1, 8, 5), Gfx.xf(Vector3(ox * 2.4, oy * 2 + 6.2, oz * 2.4), Vector3.ZERO, Vector3(2.4 * s, 2 * s, 2.4 * s))])
-	var leafM := Gfx.mat(Color.WHITE, .88)
-	Gfx.multi(root, Gfx.merge(crown_parts), leafM, TL)
-	Gfx.multi(root, Gfx.merge([[Gfx.cyl(.18, .3, 5, 6, true), Gfx.xf(Vector3(0, 2.5, 0))]]), Gfx.mat(Gfx.hexc(0x4a3a2c), 1), TL.map(func(q): return {x = q.x, y = q.y, z = q.z, ry = q.ry, sx = q.sx, sy = q.sy, sz = q.sz}), false)
+			TL.append({x = t.x, y = G(t.x, t.z) - .2, z = t.z, ry = rnd() * 6, sx = t.s, sy = t.s * R(.85, 1.2), sz = t.s, c = Color.from_hsv(R(.19, .29), R(.4, .6), R(.22, .34))})
+	var dec := [deciduous(1), deciduous(2), deciduous(3)]
+	var dfar := far_tree(false)
+	for v in 3:
+		var LL := []
+		for i in range(v, TL.size(), 3): LL.append(TL[i])
+		multi_lod(dec[v], dfar, LL)
 	# conifer forests on the hills
-	var fol := []
-	for k in 3: fol.append([Gfx.cone(2.6 - k * .6, 4.2, 10), Gfx.xf(Vector3(0, 3.2 + k * 2.1, 0))])
 	var CF := []; at = 0
 	while at < 120000 and CF.size() < 12000:
 		at += 1
@@ -487,9 +532,13 @@ func _town() -> void:
 		var y := G(x, zz)
 		if y > 230 or absf(G(x + 4, zz) - y) > 2.6: continue
 		var s := .7 + rnd() * .9
-		CF.append({x = x, y = y - .2, z = zz, ry = rnd() * 6, sx = s, sy = s, sz = s, c = Color.from_hsv(.27 + rnd() * .06, .45, .2 + rnd() * .1)})
-	Gfx.multi(root, Gfx.merge(fol), Gfx.mat(Color.WHITE, .9), CF)
-	Gfx.multi(root, Gfx.merge([[Gfx.cyl(.18, .28, 2.4, 6), Gfx.xf(Vector3(0, 1.2, 0))]]), Gfx.mat(Gfx.hexc(0x4a3626), 1), CF.map(func(q): return {x = q.x, y = q.y, z = q.z, ry = q.ry, sx = q.sx, sy = q.sy, sz = q.sz}), false)
+		CF.append({x = x, y = y - .2, z = zz, ry = rnd() * 6, sx = s * R(.9, 1.1), sy = s * R(.9, 1.25), sz = s * R(.9, 1.1), c = Color.from_hsv(.27 + rnd() * .07, R(.4, .55), .17 + rnd() * .1)})
+	var con := [conifer(1), conifer(2)]
+	var cfar := far_tree(true)
+	for v in 2:
+		var LL := []
+		for i in range(v, CF.size(), 2): LL.append(CF[i])
+		multi_lod(con[v], cfar, LL)
 	# vineyard rows west of the airfield
 	var V2 := []; var posts := []
 	z = 210.0
@@ -503,11 +552,176 @@ func _town() -> void:
 					if V2.size() % 6 == 0: posts.append({x = x, y = y, z = z})
 			x += 1.7
 		z += 2.8
-	Gfx.multi(root, Gfx.merge([[Gfx.sphere(.7, 6, 4), Gfx.xf(Vector3(0, .95, 0), Vector3.ZERO, Vector3(1, 1.1, .55))]]), Gfx.mat(Color.WHITE, .88), V2, false)
-	Gfx.multi(root, Gfx.merge([[Gfx.box(.07, 1.7, .07), Gfx.xf(Vector3(0, .85, 0))]]), Gfx.mat(Gfx.hexc(0x6b5a44), 1), posts, false)
+	var vm := Gfx.merge([[Gfx.sphere(.7, 10, 6), Gfx.xf(Vector3(0, .95, 0), Vector3.ZERO, Vector3(1, 1.1, .55))]])
+	var vmi := Gfx.multi(root, vm, null, V2, false); vmi.material_override = foliage_mat(.35, 0.0, 0.0)
+	vmi.visibility_range_end = 1600; vmi.visibility_range_end_margin = 200; vmi.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
+	Gfx.multi(root, Gfx.merge([[Gfx.box(.07, 1.7, .07), Gfx.xf(Vector3(0, .85, 0))]]), Gfx.mat(Gfx.hexc(0x6b5a44), 1), posts, false).visibility_range_end = 900
 	_church(); _powerline()
 
+
+# ---------------- vegetation ----------------
+func foliage_mat(clump := .9, needle := 0.0, sway := 1.0, sway_h := 3.0) -> ShaderMaterial:
+	var m := ShaderMaterial.new(); m.shader = load("res://shaders/world/foliage.gdshader")
+	m.set_shader_parameter("noise_t", noise_tex("a")); m.set_shader_parameter("noise_n", noise_tex("n"))
+	m.set_shader_parameter("clump", clump); m.set_shader_parameter("needle", needle); m.set_shader_parameter("sway", sway); m.set_shader_parameter("sway_h", sway_h)
+	return m
+
+func bark_mat() -> StandardMaterial3D:
+	if not _T.has("bark"):
+		var img := Gfx.noise_img(256, .03, 61, 4, .4, .8)
+		img.resize(128, 512, Image.INTERPOLATE_BILINEAR)   # stretched: vertical bark furrows
+		var m := Gfx.textured(img, .95, 4.0, Color("6a5a48")); m.uv1_scale = Vector3(2, 1, 1)
+		_T.bark = m
+	return _T.bark
+
+## pushes every vertex out along its normal by 3D noise: lumpy, natural crown silhouettes
+func lumpy(mesh: ArrayMesh, amp: float, freq: float, seed_: int) -> ArrayMesh:
+	var n := FastNoiseLite.new(); n.seed = seed_; n.frequency = freq; n.fractal_octaves = 3
+	var st := SurfaceTool.new(); st.create_from(mesh, 0)
+	var arr := st.commit_to_arrays()
+	var V: PackedVector3Array = arr[Mesh.ARRAY_VERTEX]; var Nn: PackedVector3Array = arr[Mesh.ARRAY_NORMAL]
+	for i in V.size():
+		var v := V[i]
+		V[i] = v + Nn[i] * n.get_noise_3dv(v) * amp
+	arr[Mesh.ARRAY_VERTEX] = V
+	var am := ArrayMesh.new(); am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arr)
+	var s2 := SurfaceTool.new(); s2.create_from(am, 0); s2.generate_normals()
+	return s2.commit()
+
+## broad-leaved tree: forked trunk with branches into a crown of lumpy leaf clusters (two surfaces: bark, leaves)
+func deciduous(v: int) -> ArrayMesh:
+	var r := RandomNumberGenerator.new(); r.seed = 100 + v
+	var blobs := []
+	var nb := 7 + v * 2
+	for i in nb:
+		var a := r.randf() * TAU; var rr := r.randf_range(.4, 1.0) * (0.0 if i == 0 else 2.2)
+		var c := Vector3(cos(a) * rr, 6.4 + r.randf_range(-1.3, 1.5) - rr * .25, sin(a) * rr)
+		var s := r.randf_range(1.2, 1.9) * (1.35 if i == 0 else 1.0)
+		blobs.append([Gfx.sphere(1, 11, 7), Gfx.xf(c, Vector3(r.randf(), r.randf() * 3, 0), Vector3(s * 1.05, s * .85, s))])
+	var crown := lumpy(Gfx.merge(blobs), .38, .55, v)
+	var wood := []
+	wood.append([Gfx.cyl(.15, .28, 5.2, 9), Gfx.xf(Vector3(0, 2.6, 0))])
+	wood.append([Gfx.cyl(.3, .4, .5, 9), Gfx.xf(Vector3(0, .2, 0))])
+	for i in 4:
+		var a := i * TAU / 4 + r.randf() * .8
+		var top := Vector3(cos(a) * 1.6, 6.3 + r.randf(), sin(a) * 1.6)
+		wood.append([Gfx.line_tube(Vector3(0, 3.6 + i * .35, 0), top, .09, 6), Transform3D()])
+	var trunk := Gfx.merge(wood)
+	var am := ArrayMesh.new()
+	am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, trunk.surface_get_arrays(0)); am.surface_set_material(0, bark_mat())
+	am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, crown.surface_get_arrays(0)); am.surface_set_material(1, _leaf_mat(false))
+	return am
+
+func _leaf_mat(needle: bool) -> ShaderMaterial:
+	var k := "leafN" if needle else "leafD"
+	if not _T.has(k): _T[k] = foliage_mat(.9, 1.0 if needle else 0.0, .6 if needle else 1.0, 2.0 if needle else 3.5)
+	return _T[k]
+
+## spruce / fir: drooping, star-shaped branch tiers around a straight trunk
+func conifer(v: int) -> ArrayMesh:
+	var r := RandomNumberGenerator.new(); r.seed = 200 + v
+	var st := SurfaceTool.new(); st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var tiers := 7; var H := 11.5; var spikes := 13
+	for k in tiers:
+		var t := float(k) / tiers
+		var y0 := 1.8 + t * (H - 3.0); var top := y0 + 2.6 - t * .6
+		var R := (2.9 - t * 2.5) * r.randf_range(.9, 1.1)
+		var ring := []
+		for j in spikes * 2:
+			var a := TAU * j / (spikes * 2) + r.randf() * .12 + k * .4
+			var rr := R * (1.0 if j % 2 == 0 else .55) * r.randf_range(.85, 1.1)
+			var y := y0 - (.55 if j % 2 == 0 else .15) * (R / 2.9 + .3)
+			ring.append(Vector3(cos(a) * rr, y, sin(a) * rr))
+		var apex := Vector3(0, top, 0); var cen := Vector3(0, y0 + .2, 0)
+		for j in ring.size():
+			var a: Vector3 = ring[j]; var b: Vector3 = ring[(j + 1) % ring.size()]
+			for p in [apex, b, a]: st.add_vertex(p)
+			for p in [cen, a, b]: st.add_vertex(p)
+	st.generate_normals()
+	var fol := lumpy(st.commit(), .18, 1.2, 300 + v)
+	var trunk := Gfx.merge([[Gfx.cyl(.08, .26, H, 8), Gfx.xf(Vector3(0, H / 2, 0))]])
+	var am := ArrayMesh.new()
+	am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, trunk.surface_get_arrays(0)); am.surface_set_material(0, bark_mat())
+	am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, fol.surface_get_arrays(0)); am.surface_set_material(1, _leaf_mat(true))
+	return am
+
+func far_tree(con: bool) -> ArrayMesh:
+	var m: ArrayMesh
+	if con: m = Gfx.merge([[Gfx.cone(2.5, 10.5, 6), Gfx.xf(Vector3(0, 6.2, 0))]])
+	else: m = Gfx.merge([[Gfx.sphere(1, 8, 5), Gfx.xf(Vector3(0, 6.6, 0), Vector3.ZERO, Vector3(3.2, 2.7, 3.2))], [Gfx.cyl(.2, .3, 4.5, 4, true), Gfx.xf(Vector3(0, 2.2, 0))]])
+	m.surface_set_material(0, _leaf_mat(con))
+	return m
+
+## splits instances into square cells: detailed trees near the camera, simple ones further out, cross-faded
+func multi_lod(near: Mesh, far: Mesh, L: Array, cell := 500.0, near_end := 750.0) -> void:
+	var C := {}
+	for q in L:
+		var k := Vector2i(floori(q.x / cell), floori(q.z / cell))
+		if not C.has(k): C[k] = []
+		C[k].append(q)
+	for k in C:
+		var a := Gfx.multi(root, near, null, C[k], true)
+		a.visibility_range_end = near_end; a.visibility_range_end_margin = 150; a.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
+		var b := Gfx.multi(root, far, null, C[k], false)
+		b.visibility_range_begin = near_end; b.visibility_range_begin_margin = 150; b.visibility_range_end = 7000; b.visibility_range_end_margin = 500
+		b.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF; b.add_to_group("lod_far", true)
+
+# ---------------- grass ----------------
+var excl: Image
+const EXN := 2048
+func ex_rect(x0: float, z0: float, x1: float, z1: float) -> void:
+	if excl == null: return
+	var k := EXN / U.TS
+	var a := Vector2i(int((minf(x0, x1) + U.TS / 2) * k), int((minf(z0, z1) + U.TS / 2) * k)); var b := Vector2i(ceili((maxf(x0, x1) + U.TS / 2) * k), ceili((maxf(z0, z1) + U.TS / 2) * k))
+	excl.fill_rect(Rect2i(a, b - a), Color.BLACK)
+func ex_line(P: Array, w: float) -> void:
+	for i in P.size() - 1:
+		var a: Vector2 = P[i]; var b: Vector2 = P[i + 1]; var n := maxi(1, ceili(a.distance_to(b) / 2.0))
+		for k in n + 1:
+			var p := a.lerp(b, float(k) / n); ex_rect(p.x - w / 2, p.y - w / 2, p.x + w / 2, p.y + w / 2)
+
+func _grass() -> void:
+	# one clump: five tapered, curved blades
+	var st := SurfaceTool.new(); st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var r := RandomNumberGenerator.new(); r.seed = 77
+	for b in 14:
+		var a := r.randf() * TAU; var dir := Vector3(cos(a), 0, sin(a)); var side := Vector3(-dir.z, 0, dir.x)
+		var o := Vector3(r.randf_range(-.24, .24), 0, r.randf_range(-.24, .24)); var h := r.randf_range(.16, .42); var w := r.randf_range(.011, .02); var lean := r.randf_range(.05, .2)
+		var segs := 3; var prev := []
+		for sgi in segs + 1:
+			var t := float(sgi) / segs
+			var c := o + dir * lean * t * t + Vector3(0, h * t, 0); var ww := w * (1.0 - t * .92)
+			var row := [c - side * ww, c + side * ww, t]
+			if sgi > 0:
+				var n := side.cross(Vector3(0, 1, 0) + dir * lean * 2 * t).normalized() * -1
+				var Q := [[prev[0], prev[2]], [row[0], row[2]], [row[1], row[2]], [prev[1], prev[2]]]
+				for idx in [0, 1, 2, 0, 2, 3]:
+					st.set_normal(n); st.set_uv(Vector2(0 if idx < 2 else 1, Q[idx][1])); st.add_vertex(Q[idx][0])
+			prev = row
+	var mesh := st.commit()
+	var sp := .55; var RM := 46.0
+	var pts := []
+	var nn := int(RM / sp)
+	for j in range(-nn, nn + 1):
+		for i in range(-nn, nn + 1):
+			var p := Vector2(i, j) * sp
+			if p.length() <= RM: pts.append(p)
+	pts.sort_custom(func(a, b): return a.length_squared() < b.length_squared())
+	var mm := MultiMesh.new(); mm.transform_format = MultiMesh.TRANSFORM_3D; mm.mesh = mesh; mm.instance_count = pts.size()
+	for i in pts.size(): mm.set_instance_transform(i, Transform3D(Basis(), Vector3(pts[i].x, 0, pts[i].y)))
+	var o := MultiMeshInstance3D.new(); o.name = "Grass"; o.multimesh = mm
+	o.custom_aabb = AABB(Vector3(-RM - 2, -50, -RM - 2), Vector3(2 * RM + 4, 700, 2 * RM + 4))
+	o.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var m := ShaderMaterial.new(); m.shader = load("res://shaders/world/grass.gdshader")
+	var tm: ShaderMaterial = root.get_meta("terrain_mat")
+	for k in ["color_map", "mask_map", "height_map"]: m.set_shader_parameter(k, tm.get_shader_parameter(k))
+	m.set_shader_parameter("excl_map", ImageTexture.create_from_image(excl)); m.set_shader_parameter("spacing", sp); m.set_shader_parameter("radius", RM)
+	o.material_override = m
+	o.set_meta("max_r", RM); o.set_meta("counts", [pts.size()])
+	root.add_child(o); root.set_meta("grass", o)
+
 func _plant() -> void:
+	ex_rect(850, 400, 1470, 1000)
 	var rust := Image.create(256, 256, false, Image.FORMAT_RGBA8); rust.fill(Color("8a8478"))
 	for x in range(0, 256, 4): rust.fill_rect(Rect2i(x, 0, 2, 256), Color("8a8478").lightened(.06) if x % 8 else Color("8a8478").darkened(.06))
 	for i in 130: rust.fill_rect(Rect2i(rng.randi() % 256, rng.randi() % 150, 1 + rng.randi() % 4, 20 + rng.randi() % 120), Color(.47, .23, .1).lerp(Color("8a8478"), .5))
@@ -516,10 +730,10 @@ func _plant() -> void:
 		rust.fill_rect(Rect2i(x, 20, 22, 35), Color(.12, .11, .1))
 		if rnd() < .7: emi.fill_rect(Rect2i(x, 21, 20, 33), Color("ffb060"))
 	var hm := Gfx.textured(rust, .75); hm.metallic = .35
-	hm.emission_enabled = true; hm.emission_texture = Gfx.tex(emi); hm.emission = Color.WHITE; hm.emission_energy_multiplier = 0
+	hm.emission_enabled = true; hm.emission_texture = Gfx.tex(emi); hm.emission = Color.BLACK; hm.emission_energy_multiplier = 0
 	night_windows.append([hm, 1.2])
 	var hr := Gfx.mat(Gfx.hexc(0x6f6a62), .7, .45)
-	flat(620, 600, conc_img(), 1160, .18, 700, Vector2(30, 30), 0, 1.0, Color("9a958c")).material_override.render_priority = 1
+	flat(620, 600, conc_img(), 1160, .18, 700, Vector2(17, 17), 0, 1.0, Color("8a867f"), 1.0)
 	var hall := func(x: float, z: float, w: float, h: float, d: float, ry := 0.0):
 		var g := Node3D.new(); g.position = Vector3(x, 0, z); g.rotation.y = ry; root.add_child(g)
 		var mm := Gfx.mi(g, Gfx.ubox(w, h, d, 12, h), hm); mm.set_surface_override_material(1, hr)

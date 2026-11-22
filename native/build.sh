@@ -11,7 +11,7 @@ BUILD="${1:-0}"; NOTES="${2:-}"
 ENGINE="$(godot --version | sed -E 's/^([0-9]+\.[0-9]+(\.[0-9]+)?).*/\1/')"
 [[ "$ENGINE" =~ ^[0-9]+\.[0-9]+$ ]] && ENGINE="$ENGINE.0"
 # the world id changes only when the world's own files change
-WORLD="$(cat baked/*.bin scripts/world_builder.gd shaders/water.gdshader | sha256sum | cut -c1-12)"
+WORLD="$(cat baked/*.bin scripts/world_builder.gd shaders/world/*.gdshader | sha256sum | cut -c1-12)"
 cp version.json /tmp/version.json.bak.$$; trap 'cp /tmp/version.json.bak.$$ version.json; rm -f /tmp/version.json.bak.$$' EXIT
 printf '{"build": %d, "world": "%s", "engine": "%s"}\n' "$BUILD" "$WORLD" "$ENGINE" > version.json
 

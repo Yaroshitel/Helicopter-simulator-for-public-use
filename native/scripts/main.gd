@@ -9,7 +9,7 @@ var heli: HeliBase
 var world: Node3D
 var cam: Camera3D
 var env: Environment
-var sky_mat: PhysicalSkyMaterial
+var sky_mat: ShaderMaterial
 var sun: DirectionalLight3D
 var moon_l: DirectionalLight3D
 var moon: MeshInstance3D
@@ -27,8 +27,9 @@ const SUN_MAX := 1.0; const SUN_SHADOW := .65   # peak sun energy, shadow darkne
 var sun_dir := Vector3(.39, .62, -.68).normalized(); var light_dir := Vector3(); var moon_dir := Vector3()
 var t_now := 0.0; var pt := 0.0
 var night_lights: Array; var night_windows: Array; var traffic_cars: Array = []; var traffic_mm: Array = []
-var smoke: Array = []; var cloud_mat: StandardMaterial3D; var flood: SpotLight3D; var sock_arm: Node3D
+var smoke: Array = []; var cloud_col := Color.WHITE; var flood: SpotLight3D; var sock_arm: Node3D
 var started := false
+var grass: MultiMeshInstance3D
 var star_tex: Texture2D
 
 const LAT := 50.0 * PI / 180; const DEC := 18.0 * PI / 180
@@ -56,8 +57,9 @@ func _build_scene(a: String, preview: bool) -> void:
 	_env()
 	world = WorldBuilder.new().build(); add_child(world)
 	night_lights = world.get_meta("night_lights"); night_windows = world.get_meta("night_windows")
-	flood = world.get_node("Flood"); sock_arm = world.get_node("Sock/Arm"); cloud_mat = world.get_node("Clouds").get_meta("mat")
+	flood = world.get_node("Flood"); sock_arm = world.get_node("Sock/Arm")
 	_traffic(world.get_meta("traffic")); _smoke(world.get_meta("smoke"))
+	grass = world.get_meta("grass") if world.has_meta("grass") else null
 	heli = Mi8.new(sim) if mi8 else R44.new(sim)
 	add_child(heli)
 	cam = Camera3D.new(); cam.near = .03; cam.far = 12000; cam.fov = 68; add_child(cam); cam.current = true
@@ -92,20 +94,55 @@ func _auto() -> void:
 	if AUTO.has("autoplay"):
 		set_lesson(AUTO.get("lesson", "start")); Engine.time_scale = 1.0
 		return
+	if AUTO.has("tour"):
+		await _tour(AUTO.tour); get_tree().quit(); return
 	await get_tree().create_timer(float(AUTO.get("wait", "3"))).timeout
 	if AUTO.has("shot"):
 		get_viewport().get_texture().get_image().save_png(AUTO.shot)
 		print("SHOT saved; fps ", Engine.get_frames_per_second(), " mem ", OS.get_static_memory_usage() / 1048576, " MB")
 	get_tree().quit()
 
+## test hook: renders a set of fixed views (no UI, paused) into dir, e.g.  -- --air=r44 --quick --tour=/tmp/shots --views=ext,air
+var cam_override = null
+func _tour(dir: String) -> void:
+	ui.visible = false; paused = true; settings.quality = int(AUTO.get("q", "2")); apply_quality(settings.quality)
+	var mi8 := sim.MI8; var d := 34.0 if mi8 else 14.0
+	var V := {ext = {cam = 0 + 2, orb = {a = .9, e = .2, d = d}}, rear = {cam = 2, orb = {a = 3.6, e = .35, d = d * 1.1}},
+		cock = {cam = 0, look = FWD}, cockL = {cam = 0, look = {y = .75 if not mi8 else -.7, p = -.45}}, cockD = {cam = 0, look = {y = FWD.y, p = -.5}},
+		air = {pos = Vector3(110, 55, 150), at = Vector3(-10, 0, -40)}, town = {pos = Vector3(640, 140, -520), at = Vector3(1150, 0, 250)},
+		low = {pos = Vector3(-14, 2.0, 70), at = Vector3(-140, 2, 230)}, hills = {pos = Vector3(-500, 160, -700), at = Vector3(-1500, 60, -1700)},
+		close = {cam = 2, orb = {a = .55, e = .12, d = d * .5}}, closeL = {cam = 2, orb = {a = -1.9, e = .1, d = d * .5}}, top = {cam = 2, orb = {a = 1.2, e = .9, d = d * .7}},
+		night = {cam = 2, orb = {a = .9, e = .2, d = d}, tod = 22.5}, dusk = {pos = Vector3(-60, 30, 120), at = Vector3(0, 2, -40), tod = 19.6},
+		river = {pos = Vector3(560, 40, -300), at = Vector3(700, -3, 300)}, plant = {pos = Vector3(950, 90, 300), at = Vector3(1200, 20, 700)}}
+	var tod0: float = TOD.h
+	var names: PackedStringArray = AUTO.get("views", "ext,rear,cock,cockL,air,town,low,hills,river,plant").split(",")
+	for n in names:
+		var v: Dictionary = V[n]
+		cam_override = [v.pos, v.at] if v.has("pos") else null
+		cam_mode = v.get("cam", 0)
+		if v.has("orb"): orb = v.orb.duplicate()
+		if v.has("look"): look = v.look.duplicate()
+		TOD.h = v.get("tod", tod0); TOD.speed = 0
+		for i in int(AUTO.get("frames", "6")): await get_tree().process_frame
+		get_viewport().get_texture().get_image().save_png(dir.path_join(n + ".png"))
+		print("SHOT ", n, " fps ", Engine.get_frames_per_second())
+
 func _env() -> void:
 	var we := WorldEnvironment.new(); env = Environment.new()
-	sky_mat = PhysicalSkyMaterial.new(); sky_mat.turbidity = 3.5; sky_mat.rayleigh_coefficient = 1.3; sky_mat.mie_coefficient = .004; sky_mat.mie_eccentricity = .85
-	sky_mat.sun_disk_scale = 1.0; sky_mat.energy_multiplier = .9; star_tex = _stars()
+	sky_mat = ShaderMaterial.new(); sky_mat.shader = load("res://shaders/sky.gdshader"); star_tex = _stars()
+	sky_mat.set_shader_parameter("night_sky", star_tex)
+	var cn := FastNoiseLite.new(); cn.seed = 5; cn.frequency = .0055; cn.fractal_octaves = 4; cn.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	var cimg := cn.get_seamless_image(512, 512, false, false, .1, true); cimg.generate_mipmaps()
+	sky_mat.set_shader_parameter("cloud_noise", ImageTexture.create_from_image(cimg))
+	var cc := FastNoiseLite.new(); cc.seed = 9; cc.noise_type = FastNoiseLite.TYPE_CELLULAR; cc.frequency = .018; cc.fractal_octaves = 3
+	cc.cellular_return_type = FastNoiseLite.RETURN_DISTANCE; cc.cellular_jitter = .9
+	var cel := cc.get_seamless_image(512, 512, false, false, .1, true); cel.generate_mipmaps()
+	sky_mat.set_shader_parameter("cloud_cell", ImageTexture.create_from_image(cel))
 	var sk := Sky.new(); sk.sky_material = sky_mat; sk.radiance_size = Sky.RADIANCE_SIZE_128; sk.process_mode = Sky.PROCESS_MODE_INCREMENTAL
 	env.background_mode = Environment.BG_SKY; env.sky = sk
 	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY; env.ambient_light_energy = 1.2; env.ambient_light_sky_contribution = .55; env.ambient_light_color = Color("c4ccd6"); env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
-	env.tonemap_mode = Environment.TONE_MAPPER_ACES; env.tonemap_exposure = 1.0
+	env.tonemap_mode = Environment.TONE_MAPPER_ACES; env.tonemap_exposure = 1.0; env.tonemap_white = 6.0
+	env.adjustment_enabled = true; env.adjustment_saturation = 1.08; env.adjustment_contrast = 1.04
 	env.fog_enabled = true; env.fog_density = .00008; env.fog_light_color = Color("b9cadb"); env.fog_sky_affect = .25; env.fog_aerial_perspective = .3
 	env.glow_enabled = true; env.glow_intensity = .3; env.glow_bloom = 0.0; env.glow_hdr_threshold = 1.6; env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
 	we.environment = env; add_child(we)
@@ -141,21 +178,42 @@ func apply_quality(qv: int) -> void:
 	var vp := get_viewport()
 	vp.msaa_3d = [Viewport.MSAA_DISABLED, Viewport.MSAA_2X, Viewport.MSAA_4X][qv]
 	vp.scaling_3d_scale = [.75, 1.0, 1.0][qv]
-	sun.directional_shadow_max_distance = [150.0, 400.0, 600.0][qv]
+	vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA if qv == 0 else Viewport.SCREEN_SPACE_AA_DISABLED
+	vp.use_debanding = qv > 0
+	sun.directional_shadow_max_distance = [180.0, 450.0, 700.0][qv]
+	sun.directional_shadow_split_1 = .06; sun.directional_shadow_split_2 = .18; sun.directional_shadow_split_3 = .45
+	sun.directional_shadow_blend_splits = qv > 0
 	RenderingServer.directional_shadow_atlas_set_size([2048, 4096, 8192][qv], true)
-	env.ssao_enabled = qv == 2; env.ssao_intensity = 1.0; env.ssao_light_affect = 0.0
+	RenderingServer.directional_soft_shadow_filter_set_quality([RenderingServer.SHADOW_QUALITY_SOFT_LOW, RenderingServer.SHADOW_QUALITY_SOFT_MEDIUM, RenderingServer.SHADOW_QUALITY_SOFT_HIGH][qv])
+	RenderingServer.positional_soft_shadow_filter_set_quality([RenderingServer.SHADOW_QUALITY_SOFT_LOW, RenderingServer.SHADOW_QUALITY_SOFT_MEDIUM, RenderingServer.SHADOW_QUALITY_SOFT_HIGH][qv])
+	# ambient occlusion in creases (medium+), bounced light (high), reflections on water and glass (high)
+	env.ssao_enabled = qv >= 1; env.ssao_radius = 1.2; env.ssao_intensity = 1.6; env.ssao_power = 1.4; env.ssao_detail = .6; env.ssao_light_affect = .1; env.ssao_ao_channel_affect = .4
+	RenderingServer.environment_set_ssao_quality([RenderingServer.ENV_SSAO_QUALITY_VERY_LOW, RenderingServer.ENV_SSAO_QUALITY_MEDIUM, RenderingServer.ENV_SSAO_QUALITY_HIGH][qv], true, .5, 2, 50, 300)
+	env.ssil_enabled = qv == 2; env.ssil_radius = 4.0; env.ssil_intensity = .8
+	env.ssr_enabled = qv == 2; env.ssr_max_steps = 48; env.ssr_fade_in = .2; env.ssr_fade_out = 2.0; env.ssr_depth_tolerance = .4
 	env.glow_enabled = qv > 0
+	sky_mat.set_shader_parameter("exposure", .9)
+	if world and world.has_meta("terrain_mat"):
+		(world.get_meta("terrain_mat") as ShaderMaterial).set_shader_parameter("detail_k", [.6, .85, 1.0][qv])
+	if grass:
+		var gr: float = [16.0, 28.0, 40.0][qv]
+		var n := 0; var sp: float = (grass.material_override as ShaderMaterial).get_shader_parameter("spacing")
+		n = mini(grass.multimesh.instance_count, int(PI * gr * gr / (sp * sp)))
+		grass.multimesh.visible_instance_count = n
+		(grass.material_override as ShaderMaterial).set_shader_parameter("radius", gr)
+	if world:
+		for n in world.get_tree().get_nodes_in_group("lod_far"): (n as GeometryInstance3D).visibility_range_end = [2500.0, 4500.0, 7000.0][qv]
 
 # ------------------------------------------------------------------ dynamic world
 func _traffic(lanes: Array) -> void:
 	var rng := RandomNumberGenerator.new(); rng.seed = 11
-	var cb := Gfx.merge([[Gfx.box(1.8, .75, 4.3), Gfx.xf(Vector3(0, .62, 0))]])
-	var ct := Gfx.merge([[Gfx.box(1.6, .62, 2.2), Gfx.xf(Vector3(0, 1.28, -.2))]])
+	var cms := Gfx.car_meshes()
+	var paint := Gfx.mat(Color.WHITE, .22, .35); paint.clearcoat_enabled = true; paint.clearcoat = .6
 	for i in 22:
 		var P: Array = lanes[i % 4]; var L := 0.0
 		for k in range(1, P.size()): L += P[k].distance_to(P[k - 1])
 		traffic_cars.append({P = P, L = L, u = rng.randf(), v = (6 + rng.randf() * 6) * (1 if rng.randf() < .5 else -1), c = WorldBuilder.CARC[rng.randi() % 9]})
-	for part in [[cb, Gfx.mat(Color.WHITE, .25, .6), true], [ct, Gfx.mat(Color("15181c"), .15, .3), false]]:
+	for part in [[cms[0], paint, true], [cms[1], Gfx.mat(Color("101418"), .06, .4), false], [cms[2], Gfx.mat(Color("1a1b1d"), .8, .1), false]]:
 		var mm := MultiMesh.new(); mm.transform_format = MultiMesh.TRANSFORM_3D; mm.use_colors = part[2]; mm.mesh = part[0]; mm.instance_count = 22
 		if part[2]:
 			for i in 22: mm.set_instance_color(i, traffic_cars[i].c)
@@ -174,6 +232,21 @@ func _upd_traffic(dt: float) -> void:
 		var x := a.x + (b.x - a.x) * t - dir.y * 2.2 * sd; var z := a.y + (b.y - a.y) * t + dir.x * 2.2 * sd
 		var xf := Transform3D(Basis(Vector3.UP, atan2(dir.x * sd, dir.y * sd)), Vector3(x, maxf(U.ground_h(x, z), 1.4 if absf(x - U.river_x(z)) < 78 else -1e9) + .25, z))
 		for mm in traffic_mm: mm.set_instance_transform(i, xf)
+
+## the grass patch follows the camera in whole grid steps; the rotor downwash flattens it
+func _upd_grass() -> void:
+	if not grass: return
+	var gm := grass.material_override as ShaderMaterial
+	var sp: float = gm.get_shader_parameter("spacing")
+	var c := cam.global_position
+	grass.global_position = Vector3(roundf(c.x / sp) * sp, 0, roundf(c.z / sp) * sp)
+	grass.visible = c.y - U.ground_h(c.x, c.z) < 260
+	var rr := sim.Om / sim.Om0
+	var tk := clampf(sim.T / (sim.MASS * 9.81), 0, 1.4) if sim.T else 0.0
+	gm.set_shader_parameter("rotor_pos", sim.p + sim.q * Vector3(0, 2.55 if sim.MI8 else 1.97, 0))
+	gm.set_shader_parameter("rotor_r", sim.R)
+	gm.set_shader_parameter("rotor_k", U.sstep(.2, .9, rr) * (.35 + .65 * tk) * (1.4 if sim.MI8 else 1.0))
+	gm.set_shader_parameter("wind_v", sim.wind)
 
 func _smoke(src: Array) -> void:
 	var img := Image.create(64, 64, false, Image.FORMAT_RGBA8)
@@ -199,9 +272,9 @@ func tod_update(dt: float, t: float) -> void:
 	sun_dir = Vector3(-cd * sin(H), sd * sin(LAT) + cd * cos(LAT) * cos(H), -(sd * cos(LAT) - cd * sin(LAT) * cos(H))).normalized()
 	moon_dir = Vector3(-sun_dir.x * .9 + .25, absf(sun_dir.y) * .8 + .15, -sun_dir.z * .9).normalized()
 	var y := sun_dir.y; var day := U.sstep(-.12, .18, y); var lowK := 1 - U.sstep(.03, .35, y); var up := U.sstep(-.03, .02, y); var night := 1 - U.sstep(-.22, -.02, y)
-	var st_on := night > .02
-	if (sky_mat.night_sky != null) != st_on: sky_mat.night_sky = star_tex if st_on else null
-	sky_mat.rayleigh_coefficient = 1.3 + .7 * lowK * up; sky_mat.mie_coefficient = .004 + .003 * lowK; sky_mat.turbidity = 3.5 + 1.5 * lowK
+	sky_mat.set_shader_parameter("night_k", night)
+	sky_mat.set_shader_parameter("sun_e", U.sstep(-.16, .06, y))
+	sky_mat.set_shader_parameter("rayleigh", 1.3 + .7 * lowK * up); sky_mat.set_shader_parameter("mie", .004 + .003 * lowK); sky_mat.set_shader_parameter("turbidity", 3.5 + 1.5 * lowK)
 	sun.basis = Basis.looking_at(-sun_dir, Vector3.UP if absf(sun_dir.y) < .99 else Vector3.FORWARD)
 	sun.light_color = Color("ffc896").lerp(Color("fff4e6"), U.sstep(.03, .4, y))
 	sun.light_energy = SUN_MAX * U.sstep(-.03, .15, y) * (.6 + .4 * U.sstep(.08, .45, y))
@@ -211,10 +284,15 @@ func tod_update(dt: float, t: float) -> void:
 	moon_l.basis = Basis.looking_at(-moon_dir, Vector3.UP)
 	moon_l.light_energy = .25 * night; moon_l.shadow_enabled = y <= -.03 and night > .1
 	light_dir = sun_dir if y > -.03 else moon_dir
-	env.ambient_light_energy = .45 + .55 * day; env.ambient_light_color = Color("1c2436").lerp(Color("c4ccd6"), day)
+	env.ambient_light_energy = .4 + .42 * day; env.ambient_light_color = Color("1c2436").lerp(Color("c4ccd6"), day)
 	env.fog_light_color = Color("070b16").lerp(Color("b9cadb"), day).lerp(Color("d8a27a"), lowK * up * .3)
 	env.tonemap_exposure = 1.0 + .5 * (1 - day)
-	if cloud_mat: cloud_mat.albedo_color = Color(.05, .06, .09).lerp(Color(1, 1, 1), day).lerp(Color(1, .62, .45), lowK * up * .35)
+	cloud_col = Color(.05, .06, .09).lerp(Color(1, 1, 1), day).lerp(Color(1, .62, .45), lowK * up * .35)
+	var sc := sun.light_color * sun.light_energy * 1.6
+	sky_mat.set_shader_parameter("cloud_lit", Vector3(sc.r, sc.g, sc.b) + Vector3(.03, .04, .07) * night)
+	var sh := Color(.035, .04, .06).lerp(Color(.5, .55, .64), day).lerp(Color(.55, .42, .42), lowK * up * .5)
+	sky_mat.set_shader_parameter("cloud_shade", Vector3(sh.r, sh.g, sh.b))
+	sky_mat.set_shader_parameter("cloud_time", t)
 	moon.position = cam.global_position + moon_dir * 7000; moon.visible = moon_dir.y > -.05 and day < .98
 	(moon.material_override as StandardMaterial3D).albedo_color.a = 1 - day
 	var nk := 1 - U.sstep(-.02, .12, y)
@@ -224,7 +302,7 @@ func tod_update(dt: float, t: float) -> void:
 	flood.light_energy = 6.0 * nk
 	env.glow_intensity = .3 + .5 * nk
 	for s in smoke:
-		var g: Gradient = s.color_ramp; var cc := Color(.82, .82, .82) * (cloud_mat.albedo_color if cloud_mat else Color.WHITE)
+		var g: Gradient = s.color_ramp; var cc := Color(.82, .82, .82) * cloud_col
 		for i in g.get_point_count():
 			var c := g.get_color(i); g.set_color(i, Color(cc.r, cc.g, cc.b, c.a))
 		s.direction = Vector3(sim.wind.x * .3, 1, sim.wind.z * .3).normalized()
@@ -397,11 +475,14 @@ func _process(delta: float) -> void:
 			cam.look_at(Vector3(sim.p.x + fw.x * 9, sim.p.y + 1, sim.p.z + fw.z * 9))
 		else:
 			cam.look_at(sim.p + Vector3(0, .5, 0))
+	if cam_override != null:
+		cam.position = cam_override[0]; cam.look_at(cam_override[1])
 	tod_update(dt, t)
 	sun.global_position = sim.p
 	var ws := sim.wind.length()
 	sock_arm.rotation = Vector3(-PI / 2 * (1 - U.sstep(0, 7, ws)) * .85, atan2(sim.wind.x, sim.wind.z), 0)
 	_upd_traffic(dt)
+	_upd_grass()
 	if t - pt > .033:
 		pt = t
 		heli.redraw_panels()

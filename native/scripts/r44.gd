@@ -4,7 +4,7 @@ class_name R44 extends HeliBase
 var cyc: Node3D; var col: Node3D; var grip: Node3D; var peds: Array = []; var swash: Node3D; var swR: Node3D
 var rTilt: Node3D; var rSpin: Node3D; var trSpin: Node3D; var blades: Array = []; var blur: MeshInstance3D
 var SW := {}; var keyB: Node3D; var mixK: Node3D; var carbK: Node3D; var fuelL: Node3D; var rbL: Node3D
-var navL: Array = []; var strobeL: MeshInstance3D; var ldg: SpotLight3D
+var navL: Array = []; var strobeL: MeshInstance3D; var ldg: SpotLight3D; var ldg_lens: StandardMaterial3D
 var panel_vp: SubViewport; var ped_vp: SubViewport; var pdraw: Gauges
 var ang := 0.0; var tra := 0.0
 
@@ -18,7 +18,7 @@ var GA: Array
 func _init(s: Sim) -> void:
 	sim = s; _init_mats(); name = "R44"
 	model = Node3D.new(); model.position.y = -1.15; add_child(model)
-	_gauges(); _body(); _rotor(); _tail(); _cockpit()
+	_gauges(); _body(); _rotor(); _tail(); _cockpit(); _details()
 
 func _gauges() -> void:
 	var fu := func(v: float) -> String: return ("½" if v < 1 else "F") if v else "E"
@@ -40,6 +40,65 @@ func _gauges() -> void:
 		{id = "amm", x = .285, y = .025, r = .027, o = {min = -60, max = 60, a0 = .75 * PI, a1 = 2.25 * PI, maj = 30, mn = 10, lab = [-60, 0, 60], t = "AMPS"}},
 		{id = "hobbs", x = .355, y = .025, r = .027}]
 
+## painted skin texture for a loft: u along the length (cosine-spaced stations), v around (theta / TAU)
+func _uv_of(K: Array, z: float, th: float, W: int, H: int) -> Vector2:
+	var z0: float = K[0][0]; var z1: float = K[-1][0]
+	var t := acos(clampf(1.0 - 2.0 * (z - z0) / (z1 - z0), -1, 1)) / PI
+	return Vector2(t * W, fposmod(th, TAU) / TAU * H)
+
+func _livery(K: Array, tail: bool) -> StandardMaterial3D:
+	var W := 2048; var H := 1024
+	var img := Image.create(W, H, false, Image.FORMAT_RGBA8); img.fill(Color(.93, .93, .915))
+	var rng := RandomNumberGenerator.new(); rng.seed = 44 if not tail else 45
+	var band := func(th0: float, th1: float, col: Color, z0: float, z1: float):
+		for sd in [1, -1]:
+			var a: float = th0 if sd > 0 else PI - th1; var b: float = th1 if sd > 0 else PI - th0
+			var p0 := _uv_of(K, z0, a, W, H); var p1 := _uv_of(K, z1, b, W, H)
+			img.fill_rect(Rect2i(int(minf(p0.x, p1.x)), int(minf(p0.y, p1.y)), int(absf(p1.x - p0.x)) + 1, int(absf(p1.y - p0.y)) + 1), col)
+	var seam := func(z: float, th0: float, th1: float, both := true):
+		for sd in ([1, -1] if both else [1]):
+			var a: float = th0 if sd > 0 else PI - th1; var b: float = th1 if sd > 0 else PI - th0
+			var p0 := _uv_of(K, z, a, W, H); var p1 := _uv_of(K, z, b, W, H)
+			img.fill_rect(Rect2i(int(p0.x), int(minf(p0.y, p1.y)), 2, int(absf(p1.y - p0.y))), Color(.62, .63, .64))
+			var y := minf(p0.y, p1.y)
+			while y < maxf(p0.y, p1.y):
+				img.fill_rect(Rect2i(int(p0.x) + 5, int(y), 2, 2), Color(.8, .8, .8)); y += 9
+	var ring := func(th: float, z0: float, z1: float):
+		for sd in [1, -1]:
+			var a: float = th if sd > 0 else PI - th
+			var p0 := _uv_of(K, z0, a, W, H); var p1 := _uv_of(K, z1, a, W, H)
+			img.fill_rect(Rect2i(int(minf(p0.x, p1.x)), int(p0.y), int(absf(p1.x - p0.x)), 2), Color(.62, .63, .64))
+	if not tail:
+		# navy cheat-line with a thin red pinstripe below the windows, nose to tail
+		band.call(-.36, -.2, Color("1e2c5a"), -2.3, .24); band.call(-.17, -.135, Color("a3121b"), -2.25, .24)
+		for z in [-1.16, -.27, .05]: seam.call(z, -.55, -.06)
+		ring.call(-.98, -2.2, .2); seam.call(-1.75, -1.3, -.4)
+	else:
+		band.call(-.36, -.2, Color("1e2c5a"), 1.25, 6.5); band.call(-.17, -.135, Color("a3121b"), 1.25, 6.5)
+		var z := 1.6
+		while z < 6.4:
+			var p0 := _uv_of(K, z, 0, W, H)
+			img.fill_rect(Rect2i(int(p0.x), 0, 2, H), Color(.66, .67, .68))
+			var y := 0
+			while y < H:
+				img.fill_rect(Rect2i(int(p0.x) + 5, y, 2, 2), Color(.78, .78, .78)); y += 10
+			z += .55
+		img.fill_rect(Rect2i(0, int(H * .75), W, 2), Color(.66, .67, .68))
+	# faint weathering: exhaust soot on the belly behind the engine, dust low down
+	var nz := Gfx.noise_img(256, .03, 49, 4)
+	nz.resize(W, H)
+	for y in range(0, H, 4):
+		var th := float(y) / H * TAU; var low := clampf(-sin(th), 0, 1)
+		var a := low * low * .1
+		if a > .005:
+			for x in range(0, W, 4):
+				var c := img.get_pixel(x, y).darkened(a * (.5 + nz.get_pixel(x, y).r))
+				img.fill_rect(Rect2i(x, y, 4, 4), c)
+	var m := StandardMaterial3D.new(); m.albedo_texture = Gfx.tex(img); m.roughness = .22; m.clearcoat_enabled = true; m.clearcoat = 1; m.clearcoat_roughness = .03
+	m.normal_enabled = true; m.normal_texture = Gfx.nmap(img, 1.2); m.normal_scale = .6
+	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+	return m
+
 func _body() -> void:
 	var cab_mask := func(z: float, th: float) -> int:
 		var s := sin(th); var c := cos(th)
@@ -47,7 +106,7 @@ func _body() -> void:
 		if absf(c) > .42 and s > -.05 and s < .8 and ((z > -1.12 and z < -.30) or (z > -.24 and z < .02)): return 1
 		return 0
 	var cab := loft(CAB_K, 160, 128, {}, cab_mask)
-	var o := mk(cab, null); o.set_surface_override_material(0, M.paint); o.set_surface_override_material(1, M.glass)
+	var o := mk(cab, null); o.set_surface_override_material(0, _livery(CAB_K, false)); o.set_surface_override_material(1, M.glass)
 	var inn := mk(cab, null, 0, 0, 0, null, false); inn.set_surface_override_material(0, M.inner); inn.set_surface_override_material(1, _hide())
 	# window / door frames following the cabin surface
 	var fr := func(pts: PackedVector3Array): mk(Gfx.tube(pts, .011, 6), M.dark)
@@ -65,7 +124,7 @@ func _body() -> void:
 	fr.call(around.call(-1.2, -.44, PI + .44, 48)); fr.call(along.call(-2.33, -1.2, PI / 2)); fr.call(along.call(-2.33, -1.2, -.44)); fr.call(along.call(-2.33, -1.2, PI + .44))
 	# mast fairing / upper cowl, tail cone with registration
 	mk(loft(COWL_K, 90, 72, COWL_O), M.paint)
-	mk(loft([[1.25, .30, 1.74, 1.10], [6.5, .085, 1.71, 1.54]], 120, 48, {nx = 2, nt = 2, nb = 2, cf = .5}), M.paint)
+	mk(loft([[1.25, .30, 1.74, 1.10], [6.5, .085, 1.71, 1.54]], 120, 48, {nx = 2, nt = 2, nb = 2, cf = .5}), _livery([[1.25, .30, 1.74, 1.10], [6.5, .085, 1.71, 1.54]], true))
 	for sd in [-1, 1]:
 		var lb := Label3D.new(); lb.text = "N744HF"; lb.font_size = 64; lb.pixel_size = .0042; lb.modulate = Color("1d2a5a"); lb.outline_size = 0
 		lb.position = Vector3(sd * .215, 1.6, 3.45); lb.rotation = Vector3(0, sd * PI / 2, 0); lb.shaded = true; lb.double_sided = false
@@ -172,37 +231,71 @@ func _tail() -> void:
 	mk(Gfx.cyl(.045, .06, .2, 16), M.eng, -.02, 1.70, 6.22).rotation.x = PI / 2
 
 func _cockpit() -> void:
-	mk(Gfx.box(1.15, .04, 1.9), M.dark, 0, .56, -.95, null, false)
+	mk(Gfx.box(1.15, .04, 1.9), M.carpet, 0, .56, -.95, null, false)
+	# seats: leather cushions with stitched tufts, 4-point harness with buckle
+	var belt := Gfx.mat(Color("2a3140"), .85); var buckle: Material = M.chrome
 	for x in [-.33, .33]:
-		mk(Gfx.box(.48, .12, .46), M.seat, x, .74, -.48)
-		mk(Gfx.box(.48, .62, .12), M.seat, x, 1.08, -.2).rotation.x = -.12
-	mk(Gfx.box(.34, .42, .6), M.dark, 0, .78, -.7)
+		mk(Gfx.box(.5, .1, .5), M.dark, x, .63, -.5)
+		mk(rbox(.47, .1, .45, .04), M.leather, x, .73, -.48)
+		var bk := grp(model, x, 1.06, -.2); bk.rotation.x = -.12
+		mk(rbox(.47, .6, .1, .04), M.leather, 0, 0, 0, bk)
+		for yy in [-.15, .05, .2]: mk(Gfx.box(.4, .006, .012), M.black, 0, yy, .05, bk)
+		mk(rbox(.3, .17, .08, .035), M.leather, 0, .38, .01, bk)
+		for sd in [-1, 1]:
+			var a := Vector3(x + sd * .11, 1.34, -.15); var b := Vector3(x + sd * .05, .84, -.55)
+			mk(Gfx.line_tube(a, b, .022, 4), belt).scale = Vector3(1, 1, .25)
+			mk(Gfx.line_tube(Vector3(x + sd * .22, .78, -.3), Vector3(x + sd * .04, .82, -.56), .022, 4), belt)
+		mk(Gfx.cyl(.045, .045, .015, 16), buckle, x, .83, -.57).rotation.x = PI / 2
+	mk(rbox(.34, .42, .6, .03), M.crinkle, 0, .78, -.7)
+	# circuit breakers on the console top
+	for i in 7:
+		for j in 2:
+			mk(Gfx.cyl(.007, .007, .014, 10), M.black, -.12 + i * .04, 1.0, -.88 + j * .05)
+	var cbl := Label3D.new(); cbl.text = "CIRCUIT BREAKERS"; cbl.font_size = 24; cbl.pixel_size = .0007; cbl.position = Vector3(0, .995, -.94); cbl.rotation.x = -PI / 2; cbl.modulate = Color("cccccc"); cbl.outline_size = 0
+	model.add_child(cbl)
 	# cyclic T-bar
 	cyc = grp(model, 0, .6, -.98)
 	mk(Gfx.cyl(.022, .028, .44, 12), M.black, 0, .22, 0, cyc)
 	mk(Gfx.cyl(.018, .018, .62, 12), M.black, .03, .44, 0, cyc).rotation.z = PI / 2
-	for x in [-.27, .33]: mk(Gfx.cyl(.022, .02, .13, 12), M.black, x, .5, 0, cyc)
+	for x in [-.27, .33]:
+		mk(Gfx.cyl(.024, .022, .13, 16), M.rubber, x, .5, 0, cyc)
+		mk(Gfx.sphere(.024, 12, 6, true), M.rubber, x, .565, 0, cyc)
+		mk(Gfx.cyl(.007, .007, .012, 8), M.red, x + .012, .555, -.02, cyc).rotation.x = PI / 2
+	mk(Gfx.cyl(.06, .03, .1, 16), M.rubber, 0, .03, 0, cyc)
 	hit("cyc", Vector3(.12, .2, .12), .33, .48, 0, cyc)
 	# collective + twist grip
 	col = grp(model, .08, .66, -.18)
 	mk(Gfx.cyl(.018, .022, .6, 12), M.black, 0, 0, -.3, col).rotation.x = PI / 2
 	grip = grp(col, 0, 0, -.62)
-	mk(Gfx.cyl(.026, .026, .13, 16), M.dark, 0, 0, 0, grip).rotation.x = PI / 2
+	mk(Gfx.cyl(.027, .027, .13, 20), M.rubber, 0, 0, 0, grip).rotation.x = PI / 2
+	for k in 5: mk(Gfx.torus(.027, .003, 20, 4), M.dark, 0, 0, -.05 + k * .025, grip)
+	mk(rbox(.05, .04, .05, .01), M.anod, 0, .02, -.08, grip)
 	mk(Gfx.box(.012, .02, .13), M.red, 0, .026, 0, grip)
 	hit("coll", Vector3(.08, .08, .36), 0, 0, -.32, col); hit("twist", Vector3(.08, .08, .14), 0, 0, -.62, col)
 	for x in [.24, .43]:
-		var p := mk(Gfx.box(.08, .12, .03), M.dark, x, .66, -1.5); p.rotation.x = -.5; peds.append(p)
+		var p := mk(rbox(.085, .13, .025, .008), M.rubber, x, .66, -1.5); p.rotation.x = -.5; peds.append(p)
+		mk(Gfx.cyl(.012, .012, .12, 8), M.steel, x, .6, -1.47)
+	for x in [-.24, -.43]:
+		mk(rbox(.085, .13, .025, .008), M.rubber, x, .66, -1.5).rotation.x = -.5
+		mk(Gfx.cyl(.012, .012, .12, 8), M.steel, x, .6, -1.47)
 	hit("ped", Vector3(.3, .15, .1), .335, .66, -1.5, model)
 	# instrument panel
 	var panel := grp(model, 0, 1.2, -1.42); panel.rotation.x = -.27
 	pdraw = R44Panel.new(); pdraw.heli = self; pdraw.PS = 1400
 	panel_vp = panel_quad(.8, .42, 1400, panel, pdraw)
-	mk(Gfx.box(.84, .46, .2), M.dark, 0, 0, -.101, panel)
-	mk(Gfx.box(.88, .03, .2), M.black, 0, .23, .04, panel).rotation.x = .12
+	mk(rbox(.86, .48, .2, .025), M.crinkle, 0, 0, -.101, panel)
+	var hood := mk(rbox(.92, .035, .26, .016), M.crinkle, 0, .24, .04, panel); hood.rotation.x = .12
+	for sx in [-.405, .405]:
+		for sy in [-.2, .2]: screw(sx, sy, .002, panel, .0045)
+	# magnetic compass on the glare shield
+	var cmp := grp(panel, .0, .3, .03)
+	mk(rbox(.07, .05, .05, .01), M.black, 0, 0, 0, cmp)
+	mk(Gfx.box(.04, .022, .002), Gfx.mat(Color("d8d2c0"), .5), 0, 0, .026, cmp)
+	mk(Gfx.box(.002, .022, .003), M.red, 0, 0, .027, cmp)
 	var ped := grp(model, 0, .8, -1.36); ped.rotation.x = -.5
 	var pd := R44Pedestal.new(); pd.heli = self; pd.PS = 1400
 	ped_vp = panel_quad(.3, .4, 1400, ped, pd)
-	mk(Gfx.box(.32, .42, .3), M.dark, 0, 0, -.151, ped)
+	mk(rbox(.33, .43, .3, .02), M.crinkle, 0, 0, -.151, ped)
 	# switches
 	for sw in SWX:
 		var id: String = sw[0]; var p := grp(panel, sw[1], -.145, 0)
@@ -215,7 +308,8 @@ func _cockpit() -> void:
 			mk(Gfx.box(.004, .03, .03), M.red, -.014, 0, .015, p); mk(Gfx.box(.004, .03, .03), M.red, .014, 0, .015, p)
 		hit(id, Vector3(.045, .05, .04), 0, 0, .02, p)
 	for g in GA:
-		var rim := mk(Gfx.torus(g.r + .002, .0045, 48, 6), M.black, g.x, g.y, .004, panel); rim.rotation.x = PI / 2
+		var rim := mk(Gfx.torus(g.r + .002, .0045, 48, 8), M.anod, g.x, g.y, .004, panel); rim.rotation.x = PI / 2
+		gauge_glass(g.r, g.x, g.y, panel)
 		hit(g.id, Vector3(g.r * 1.8, g.r * 1.8, .01), g.x, g.y, .009, panel)
 	hit("ann", Vector3(.77, .036, .01), 0, .18, .006, panel)
 	var keyG := grp(panel, .27, -.14, .005)
@@ -232,6 +326,45 @@ func _cockpit() -> void:
 	fuelL = grp(ped, -.08, -.165, .01); mk(Gfx.box(.014, .05, .014), M.red, 0, .018, 0, fuelL); hit("fuelV", Vector3(.06, .06, .04), 0, 0, .01, fuelL)
 	rbL = grp(ped, .08, -.165, .01); mk(Gfx.cyl(.006, .006, .04, 8), M.chrome, 0, 0, .02, rbL).rotation.x = PI / 2
 	mk(Gfx.box(.05, .012, .012), M.red, 0, 0, .04, rbL); hit("rbrake", Vector3(.06, .06, .06), 0, 0, .02, rbL)
+
+## small exterior parts: landing lights, door handles, hinges, antennas, cowling louvres, fuel cap, step plates
+func _details() -> void:
+	var nrm := func(z: float, th: float) -> Vector3:
+		var p := sec_pt(CAB_K, z, th); var a := sec_pt(CAB_K, z + .02, th) - sec_pt(CAB_K, z - .02, th); var b := sec_pt(CAB_K, z, th + .02) - sec_pt(CAB_K, z, th - .02)
+		var n := b.cross(a).normalized()
+		return n if n.dot(p - Vector3(0, 1.2, p.z + .5)) > 0 else -n
+	var place := func(mesh: Mesh, m: Material, z: float, th: float, out := 0.0) -> MeshInstance3D:
+		var p := sec_pt(CAB_K, z, th); var n: Vector3 = nrm.call(z, th)
+		var o := mk(mesh, m, p.x + n.x * out, p.y + n.y * out, p.z + n.z * out)
+		o.look_at_from_position(o.position, o.position + n, Vector3.UP if absf(n.y) < .95 else Vector3.FORWARD)
+		return o
+	# twin landing lights in the nose
+	var lens := Gfx.mat(Color("dfe6ee"), .05, .2); lens.emission_enabled = true; lens.emission = Color("fff4e0"); lens.emission_energy_multiplier = .2
+	ldg_lens = lens
+	for th in [-1.25, PI + 1.25]:
+		var l: MeshInstance3D = place.call(Gfx.cyl(.045, .05, .02, 24), M.chrome, -2.31, th, .004); l.rotate_object_local(Vector3.RIGHT, PI / 2)
+		var g: MeshInstance3D = place.call(Gfx.cyl(.038, .038, .012, 24), lens, -2.31, th, .012); g.rotate_object_local(Vector3.RIGHT, PI / 2)
+	# door handles and hinges, both sides
+	for th in [-.18, PI + .18]:
+		for z in [-.42, .0]:
+			place.call(rbox(.012, .02, .1, .005), M.chrome, z - .06, th, .012)
+		for z in [-1.1, -.24]:
+			for dy in [.25, -.05]:
+				place.call(Gfx.cyl(.008, .008, .05, 8), M.steel, z + .04, th + dy, .004)
+	# whip antenna on the tail cone, blade antenna under the belly, OAT probe
+	mk(Gfx.cyl(.002, .005, .7, 6), M.black, 0, 2.08, 3.2).rotation.x = .35
+	mk(rbox(.012, .14, .16, .005), M.dark, 0, .44, -1.0)
+	mk(Gfx.cyl(.004, .004, .05, 6), M.chrome, .12, 1.95, -1.7).rotation.x = PI / 2
+	# louvres on the mast fairing, fuel cap
+	for sd in [-1, 1]:
+		for k in 6:
+			var lv := mk(rbox(.012, .1, .025, .005), M.black, sd * .37, 1.62, .55 + k * .07); lv.rotation.z = sd * .2
+	mk(Gfx.cyl(.035, .035, .012, 20), M.chrome, -.3, 1.95, .2).rotation.z = .55
+	# skid step plates (non-slip), skid shoes
+	for x in [-1.1, 1.1]:
+		mk(rbox(.12, .012, .22, .004), M.tread if M.has("tread") else M.steel, x * .95, .6, -1.05)
+	# position lights on the stabiliser end plates
+	mk(Gfx.box(.03, .12, .16), M.paint, .41, 1.48, 5.55)
 
 ## per-frame animation of rotors, controls and lights
 func animate(dt: float, t: float) -> void:
@@ -255,6 +388,7 @@ func animate(dt: float, t: float) -> void:
 	for l in navL: l.visible = el and S.nav
 	strobeL.visible = el and S.strobe and fmod(t * 1.2, 1.0) < .08
 	ldg.light_energy = 6.0 if (el and S.ldg) else 0.0
+	if ldg_lens: ldg_lens.emission_energy_multiplier = 8.0 if (el and S.ldg) else .2
 
 func redraw_panels() -> void:
 	pdraw.queue_redraw()
