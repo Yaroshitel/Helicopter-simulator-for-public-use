@@ -2,7 +2,9 @@
 
 A browser-based helicopter flying simulator built with three.js. Learn what every switch, lever and gauge does, start the helicopter from cold yourself, then hover and fly.
 
-**▶ Play:** https://yaroshitel.github.io/Helicopter-simulator-for-public-use/
+**▶ Play in the browser:** https://yaroshitel.github.io/Helicopter-simulator-for-public-use/
+
+**🖥 Desktop app (Windows .exe / macOS .app, no browser needed):** download from [`releases/`](releases/), see [DESKTOP.md](DESKTOP.md).
 
 ## Helicopters
 
