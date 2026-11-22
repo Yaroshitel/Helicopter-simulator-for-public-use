@@ -49,6 +49,8 @@ func _ready() -> void:
 func _build_scene(a: String, preview: bool) -> void:
 	var mi8 := a == "mi8"
 	sim = Sim.new(mi8)
+	sim.crashed.connect(func(m): if AUTO.has("autoplay"): print("CRASH: ", m, " euler ", Sim.euler_yxz(sim.q), " v ", sim.v)
+	)
 	sim.crashed.connect(func(m): ui.show_msg("💥 " + m + "\n[font_size=15]Backspace to reset[/font_size]"))
 	_env()
 	world = WorldBuilder.new().build(); add_child(world)
@@ -86,6 +88,9 @@ func _auto() -> void:
 	if AUTO.has("nomoon"): moon_l.queue_free(); moon_l = DirectionalLight3D.new()
 	if AUTO.has("hover"):
 		sim.p.y += 6.0
+	if AUTO.has("autoplay"):
+		set_lesson(AUTO.get("lesson", "start")); Engine.time_scale = 1.0
+		return
 	await get_tree().create_timer(float(AUTO.get("wait", "3"))).timeout
 	if AUTO.has("shot"):
 		get_viewport().get_texture().get_image().save_png(AUTO.shot)
@@ -351,10 +356,13 @@ func input_step(dt: float) -> void:
 	S.sas = settings.sas
 
 func _process(delta: float) -> void:
-	var dt := minf(.05, delta); t_now += delta; var t := t_now
+	var dt := minf(.05, delta)
+	if AUTO.has("autoplay"): dt = 1.0 / 30
+	t_now += dt; var t := t_now
 	if not sim: return
 	if started:
 		input_step(dt)
+		if AUTO.has("autoplay"): _autopilot(dt)
 		var g := wind_spd * ((1 + .5 * sin(t * .7) * sin(t * 1.9)) if wind_spd > 5 else 1.0)
 		sim.wind = Vector3(.866 * g, 0, .5 * g)
 		if not paused and not sim.is_crashed:
@@ -402,3 +410,92 @@ func _process(delta: float) -> void:
 func switch_aircraft(a: String) -> void:
 	aircraft = a
 	get_tree().reload_current_scene()
+
+# ------------------------------------------------------------------ test autopilot: flies the current lesson through the real controls
+var _ap_low := 0.0; var _ap_trim := 0.0; var _ap_t := 0.0; var _ap_last := -1; var _ap_clock := 0.0; var _ap_log := 0.0
+func _autopilot(dt: float) -> void:
+	_ap_clock += dt; _ap_t -= dt
+	var st: Array = LES[L.k]; var i: int = L.done.find(false); var S := sim.S; var C := sim.C
+	if i != _ap_last:
+		_ap_t = .5
+		print("[%6.1fs] step %d/%d: %s" % [_ap_clock, i + 1, st.size(), "DONE" if i < 0 else st[i][1]]); _ap_last = i
+	if i < 0 or _ap_clock > float(AUTO.get("tmax", "900")):
+		print("AUTOPLAY ", "COMPLETE" if i < 0 else "TIMEOUT", " crashed=", sim.is_crashed)
+		for k in ["twist", "thr", "gi", "frac", "ice", "carb", "carbT", "key", "mix", "clutchE", "gov", "rbrake", "fuelM"]: if S.has(k): print("   ", k, " = ", S[k])
+		get_tree().quit(); return
+	if sim.is_crashed: print("AUTOPLAY CRASH ", ui.msg.text if ui.msg else ""); get_tree().quit(); return
+	var id: String = st[i][0]; var lab: String = st[i][1]; var re := sim.We / sim.Om0
+	var click := func(cid: String):
+		if _ap_t <= 0: use_control(cid, false); _ap_t = 12.0   # one click, retry only if nothing happened for 12 s
+	# hover controller (used once the rotor is up to speed)
+	var hold = sim.Om / sim.Om0 > .9 and (id in ["coll", "cyc"]) and L.k == "start"
+	if hold:
+		settings.sas = true
+		var e := Sim.euler_yxz(sim.q); var vb := sim.q.inverse() * sim.v
+		var tgt := 1.4
+		var droop := maxf(0, (.99 if not sim.MI8 else .94) - sim.Om / sim.Om0) * 3.0
+		if sim.Om / sim.Om0 < .95 and sim.agl < .3: _ap_low = 3.0
+		_ap_low -= dt
+		if _ap_low > 0: C.coll = clampf(C.coll - .3 * dt, 0, 1)   # LOW RPM on the ground: lower the lever, let RPM recover
+		else: C.coll = clampf(C.coll + ((tgt - sim.agl) * .12 - sim.v.y * .5 - droop) * dt, 0, 1)
+		C.tx = clampf(e.z * 1.2 + sim.w.z * .6 - vb.x * .35, -1, 1)
+		C.ty = clampf(e.x * 1.2 + sim.w.x * .6 + vb.z * .35, -1, 1)
+		var yc := 1.5 * sim.w.y + .8 * U.wrap_a(e.y)
+		_ap_trim = clampf(_ap_trim + yc * dt * .5, -1, 1); C.ped = clampf(_ap_trim + yc, -1, 1)
+	if _ap_log <= 0 and hold:
+		_ap_log = 1.0; print("   hover: agl %.2f gs %.2f vy %.2f rotor %.0f%% coll %.2f ped %.2f" % [sim.agl, sim.v.length(), sim.v.y, sim.Om / sim.Om0 * 100, C.coll, C.ped])
+	_ap_log -= dt
+	if hold: return
+	match id:
+		"twist":
+			if sim.MI8: S.twist = clampf(S.twist + (1.0 if "RIGHT" in lab else -1.0) * .35 * dt, 0, 1)
+			elif "crack" in lab: S.twist = .1
+			elif "50–60" in lab: S.twist = clampf(S.twist + (.58 - re) * .4 * dt, 0, 1)
+			elif "close" in lab: S.twist = clampf(S.twist - .35 * dt, 0, 1)
+			else: S.twist = clampf(S.twist + .35 * dt, 0, 1)
+		"key":
+			if L.k == "shut": click.call("key") if S.key > 0 and false else (null); S.key = 0 if S.key > 0 and _ap_t <= 0 else S.key
+			elif not S.running: S.key = 4
+			else: S.key = 3
+		"ann", "oilp", "cat":
+			if not sim.MI8 and S.clutch: S.twist = clampf(S.twist + (.6 - re) * .4 * dt, 0, 1)
+		"coll":
+			C.coll = clampf(C.coll - .3 * dt, 0, 1)
+		"rbrake":
+			if L.k == "shut" and sim.Om / sim.Om0 > (.3 if sim.MI8 else .5): pass
+			elif not st[i][2].call(): click.call(id)
+		"mapuS":
+			if not S.apu.start and not S.apu.on: click.call(id)
+		"mstart":
+			if not S.eng[S.sel].start and not S.eng[S.sel].running: click.call(id)
+		"mcondL":
+			if "AUTO" in lab:
+				if S.cond[0] < 2: click.call("mcondL")
+				elif S.cond[1] < 2: click.call("mcondR")
+			elif "IDLE" in lab and L.k == "shut":
+				if S.cond[0] > 1: use_control("mcondL", true); use_control("mcondR", true)
+			elif "STOP" in lab:
+				if S.cond[0] > 0 and _ap_t <= 0: use_control("mcondL", true); use_control("mcondR", true); _ap_t = .6
+			else: click.call("mcondL")
+		"mfcL":
+			if _ap_t <= 0:
+				var want = L.k == "start"
+				if S.fcock[0] != want: use_control("mfcL", false)
+				if S.fcock[1] != want: use_control("mfcR", false)
+				_ap_t = .6
+		"mgenL":
+			if _ap_t <= 0:
+				var want = L.k == "start"
+				if S.genL != want: use_control("mgenL", false)
+				if S.genR != want: use_control("mgenR", false)
+				_ap_t = .6
+		"msvc":
+			if L.k == "start": click.call(id) if not S.svc else null
+			elif _ap_t <= 0:
+				if S.svc: use_control("msvc", false)
+				if S.pL or S.pR: use_control("mpL", false)
+				_ap_t = .6
+		"mhyd":
+			if not st[i][2].call() and (S.hyd != (L.k == "start")): click.call(id)
+		_:
+			if CTRL.has(id) and CTRL[id].has("a") and not st[i][2].call(): click.call(id)
