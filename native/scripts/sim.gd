@@ -24,7 +24,8 @@ var S := {}                                                     # systems / swit
 var C := {cx = 0.0, cy = 0.0, tx = 0.0, ty = 0.0, coll = 0.0, ped = 0.0}   # controls
 var wind := Vector3()
 var CPTS: Array = []
-var SASG: Dictionary
+var HQ: Dictionary                 # handling qualities: max rates (pitch, roll, yaw rad/s), response lags (s), self-levelling (1/s)
+var Qref := 0.0                    # slowly-following rotor torque: only torque CHANGES kick the nose round
 
 func _init(mi8: bool) -> void:
 	MI8 = mi8
@@ -34,21 +35,20 @@ func _init(mi8: bool) -> void:
 			TH0 = .017, THR = .245, ST = [.7, .85], DIR = -1.0, TRK = 16000.0, TRB = .3, TRG = .7, TRC = 600.0, TRA = 12.0, TRP0 = 40000.0,
 			FD = [40.0, 60.0, 4.0], FIN = 14.0, STB = 12.0, DMP = [3000.0, 5000.0, 1500.0], SAS = {wn = [1.0, 1.1, .8], A = [.2, .2, .15]},
 			KH = 150000.0, b1r = .046, kc = [1.2e6, 1e5, 4e5, 4e4], y0 = 1.87, agl0 = 1.9, vyLim = -4.0, cyc = [.12, .10], pick = 3.2, lag = .12,
-			cpts = [[0, -1.9, -3.6, "n"], [2.25, -1.9, .65, "w"], [-2.25, -1.9, .65, "w"], [0, -.95, 10.35, "t"]]}
+			cpts = [[0, -1.9, -3.6, "n"], [2.25, -1.9, .65, "w"], [-2.25, -1.9, .65, "w"], [0, -.95, 10.35, "t"]],
+			HQ = {rate = [.38, .50, .42], tau = [1.0, .8, 1.1], lev = .32, tilt = .035, torq = .22}}
 	else:
 		PHY = {Om0 = 42.7, R = 5.03, SIG = .032, CD0 = .0095, MASS = 1100.0, Ix = 2600.0, Iy = 2500.0, Iz = 750.0, IR = 550.0,
 			HUB = Vector3(0, 1.97, 0), TRP = Vector3(-.26, .55, 6.38), TAIL = Vector3(0, .45, 6.0),
 			TH0 = .012, THR = .22, ST = [.6, .8], DIR = 1.0, TRK = 1500.0, TRB = .12, TRG = .88, TRC = 45.0, TRA = 1.7, TRP0 = 2500.0,
 			FD = [5.5, 6.0, 1.1], FIN = 1.6, STB = 1.5, DMP = [100.0, 200.0, 60.0], SAS = {wn = [1.3, 1.6, 0.0], A = [.2, .2, 0.0]},
 			KH = 0.0, b1r = 0.0, kc = [8e4, 8e3, 3e4, 3e3], y0 = 1.13, agl0 = 1.12, vyLim = -3.6, cyc = [.17, .13], pick = 2.5, lag = .07,
-			cpts = [[1.1, -1.1, -1.4, ""], [-1.1, -1.1, -1.4, ""], [1.1, -1.1, 1.15, ""], [-1.1, -1.1, 1.15, ""], [0, -.33, 6.62, "t"]]}
+			cpts = [[1.1, -1.1, -1.4, ""], [-1.1, -1.1, -1.4, ""], [1.1, -1.1, 1.15, ""], [-1.1, -1.1, 1.15, ""], [0, -.33, 6.62, "t"]],
+			HQ = {rate = [.62, .85, .85], tau = [.55, .45, .6], lev = .38, tilt = .045, torq = .25}}
 	Om0 = PHY.Om0; R = PHY.R; SIG = PHY.SIG; CD0 = PHY.CD0; MASS = PHY.MASS; Ix = PHY.Ix; Iy = PHY.Iy; Iz = PHY.Iz; IR = PHY.IR; DIR = PHY.DIR
 	AR = PI * R * R; HUB = PHY.HUB; TRP = PHY.TRP; TAIL = PHY.TAIL
 	for a in PHY.cpts: CPTS.append({r = Vector3(a[0], a[1], a[2]), t = a[3], anc = null})
-	var W := MASS * 9.81; var P: Dictionary = PHY.SAS
-	var mp: float = (W * HUB.y + PHY.KH) * PHY.cyc[0]; var mr: float = (W * HUB.y + PHY.KH) * PHY.cyc[1]; var my: float = PHY.TRK * PHY.TRG * TRP.z
-	SASG = {p = [pow(P.wn[0], 2) * Ix / mp, 1.2 * P.wn[0] * Ix / mp], r = [pow(P.wn[1], 2) * Iz / mr, 1.2 * P.wn[1] * Iz / mr],
-		y = [pow(P.wn[2], 2) * Iy / my, 1.4 * P.wn[2] * Iy / my], A = P.A}
+	HQ = PHY.HQ
 	reset()
 
 ## three.js Euler 'YXZ' decomposition (x = pitch, y = yaw, z = roll)
@@ -65,7 +65,7 @@ static func euler_yxz(qq: Quaternion) -> Vector3:
 func reset() -> void:
 	p = Vector3(0, PHY.y0, 0); v = Vector3(); q = Quaternion(); w = Vector3()
 	Om = 0; We = 0; li = .03; a1 = 0; b1 = 0; is_crashed = false
-	sas.x = 0.0; sas.z = 0.0; sas.d = 0.0; sas.sc = 1.0; sas.sp = 1.0
+	sas.x = 0.0; sas.z = 0.0; sas.d = 0.0; Qref = 0.0; sas.sc = 1.0; sas.sp = 1.0
 	S.clear(); S.merge({batt = false, alt = false, avion = false, gov = false, strobe = false, nav = false, ldg = false, clutch = false, clutchE = 0.0, key = 0, mix = false, carb = 0.0, fuelV = false, rbrake = true,
 		twist = 0.0, running = false, fuelM = 24.0, fuelA = 14.0, oilT = 59.0, oilP = 0.0, cht = 59.0, ice = 0.0, batQ = 1.0, gi = 0.0, thr = 0.0, frac = 0.0, carbT = 15.0, amps = 0.0,
 		starter = false, cm = false, elec = false, low = false, hb = 1.0, sas = false, vsi = 0.0, map = 0.0, hobbs = 1234.5})
@@ -81,10 +81,10 @@ func quick() -> void:
 	if MI8:
 		S.merge({batt = true, genL = true, genR = true, hyd = true, nav = true, beacon = true, svc = true, pL = true, pR = true, fcock = [true, true], cond = [2, 2], rbrake = false, pbrake = false, twist = 1.0, gi = .25}, true)
 		for E in S.eng: E.merge({ng = 80.0, running = true, egt = 650.0, oil = 3.5}, true)
-		Om = .95 * Om0; C.ped = .2
+		Om = .95 * Om0; C.ped = 0.0
 		return
 	S.merge({batt = true, alt = true, avion = true, gov = true, strobe = true, nav = true, clutch = true, clutchE = 1.0, key = 3, mix = true, fuelV = true, rbrake = false, twist = .25, running = true, oilT = 180.0, oilP = 80.0, cht = 330.0}, true)
-	Om = 1.02 * Om0; We = Om; C.ped = -.15
+	Om = 1.02 * Om0; We = Om; C.ped = 0.0
 
 func crash(t: String) -> void:
 	if is_crashed: return
@@ -93,7 +93,7 @@ func crash(t: String) -> void:
 
 # SAS: a limited-authority attitude hold that moves the controls through series actuators (see the manual).
 func sas_step(dt: float, r: float) -> Vector3:
-	var A := sas; var G := SASG; var e := euler_yxz(q); var pp := e.x; var rl := e.z; var y := e.y
+	var A := sas; var e := euler_yxz(q); var pp := e.x; var rl := e.z; var y := e.y
 	var on: bool = S.sas and r > .9 and not touch and S.elec != false
 	var pc: Array = A.pc
 	var mv: float = absf(C.cx - pc[0]) + absf(C.cy - pc[1]); var mp: float = absf(C.ped - pc[2]); pc[0] = C.cx; pc[1] = C.cy; pc[2] = C.ped
@@ -103,13 +103,19 @@ func sas_step(dt: float, r: float) -> Vector3:
 	if A.sc > 0: A.p = pp; A.r = rl
 	if A.sp > 0: A.y = y
 	var hold := func(x: float) -> float: return 0.0 if A.sc > 0 else x
-	var ty := clampf(G.p[0] * hold.call(pp - A.p) + G.p[1] * w.x, -G.A[0], G.A[0]) if on else 0.0
-	var tx := clampf(G.r[0] * hold.call(rl - A.r) + G.r[1] * w.z, -G.A[1], G.A[1]) if on else 0.0
+	var R0: Array = HQ.rate; var lim: Array = PHY.SAS.A
+	var ty := clampf((1.2 * hold.call(pp - A.p) + .5 * w.x) / R0[0], -lim[0], lim[0]) if on else 0.0
+	var tx := clampf((1.2 * hold.call(rl - A.r) + .5 * w.z) / R0[1], -lim[1], lim[1]) if on else 0.0
 	var tz := 0.0
-	if on and G.A[2] > 0:
-		tz = clampf(G.y[0] * (0.0 if A.sp > 0 else U.wrap_a(y - A.y)) + G.y[1] * w.y, -G.A[2], G.A[2])
+	if on and lim[2] > 0:
+		tz = clampf((.8 * (0.0 if A.sp > 0 else U.wrap_a(y - A.y)) + .5 * w.y) / R0[2], -lim[2], lim[2])
 	A.d = A.d + clampf(ty - A.d, -.8 * dt, .8 * dt); A.x = A.x + clampf(tx - A.x, -.8 * dt, .8 * dt); A.z = A.z + clampf(tz - A.z, -.8 * dt, .8 * dt)
 	return Vector3(A.x, A.d, A.z)   # x = roll, y = pitch, z = yaw
+
+## stick shaping: small movements do very little, the last third of travel gives the real authority
+static func shape(x: float) -> float:
+	x = clampf(x, -1, 1)
+	return .25 * x + .75 * x * x * x
 
 func _ap(x: float, t: float, k: float, dt: float) -> float:
 	return x + (t - x) * minf(1, k * dt)
@@ -118,16 +124,14 @@ func step(dt: float) -> void:
 	var qi := q.inverse(); var rho := 1.225 * exp(-maxf(0, p.y) / 9000.0); var dr := rho / 1.225; var h5 := .5 * rho; var hb: float = S.hb
 	var vb := qi * (v - wind); var r := Om / Om0; var OR := maxf(Om * R, 5.0); var u := -vb.z
 	mu = Vector2(vb.x, vb.z).length() / OR
-	# rotor disk response to body rates: on-axis lag gives the rotor's own damping, the gyroscopic term couples pitch and roll
-	var kl: float = PHY.lag * Om0 / Om if Om > 5 else 0.0
-	var kc := DIR / Om if Om > 5 else 0.0
+	# Handling: cyclic and pedals command a rotation rate that builds and decays with the inertia of the airframe
+	# (rotor hub moment and rotor damping lumped together). The disc itself tilts only a little with the stick,
+	# so the aircraft moves mostly by changing attitude - heavy and deliberate, not twitchy.
 	th = PHY.TH0 + C.coll * PHY.THR
-	var fb := clampf(2 * (4.0 / 3.0 * th - lam), .06, .45)
 	var sv := sas_step(dt, r)
-	var tA: float = (C.cy + sv.y) * hb * PHY.cyc[0] - clampf(u / OR, -.5, .5) * fb + kl * w.x + kc * w.z
-	var tB: float = (C.cx + sv.x) * hb * PHY.cyc[1] + PHY.b1r - clampf(vb.x / OR, -.5, .5) * fb + kl * w.z - kc * w.x
-	var k := minf(1, dt / (PHY.lag / (.5 if hb < 1 else 1.0)))
-	a1 += (tA - a1) * k; b1 += (tB - b1) * k
+	var tilt: float = HQ.tilt * hb
+	var k := minf(1, dt / PHY.lag)
+	a1 += (shape(C.cy) * tilt - a1) * k; b1 += (shape(C.cx) * tilt - b1) * k
 	var n := Vector3(sin(b1), cos(a1) * cos(b1), -sin(a1)); var lc := vb.dot(n) / OR
 	# momentum inflow (induced-power factor 1.15) with dynamic inflow
 	const KAP := 1.15
@@ -146,8 +150,8 @@ func step(dt: float) -> void:
 		ge = minf(1.35, 1 / (1 - pow(R / (4 * maxf(hA, R * .3)), 2))); ge = 1 + (ge - 1) * maxf(0, 1 - mu / .12)
 	T = CT * (1 - .4 * vrs) * ge * U.sstep(PHY.ST[0], PHY.ST[1], r) * rho * AR * Om * Om * R * R
 	var Qr := (maxf(CT, 0) * (lc + li) + SIG * CD0 / 8 * (1 + 4.6 * mu2)) * rho * AR * Om * Om * R * R * R
-	var tvx := vb.x + w.y * TRP.z - w.z * TRP.y
-	Ttr = (PHY.TRK * DIR * (PHY.TRB - PHY.TRG * DIR * (C.ped + sv.z)) - PHY.TRC * tvx) * r * r * dr
+	# tail rotor: the thrust it needs to cancel main-rotor torque plus whatever the pedals ask for (for power, sound)
+	Ttr = clampf(DIR * Qd / TRP.z - C.ped * PHY.TRK * PHY.TRG * .5 * r * r * dr, -2.5 * PHY.TRK * r * r, 2.5 * PHY.TRK * r * r) if Om > 1 else 0.0
 	var Qtr: float = (absf(Ttr) * sqrt(absf(Ttr) / (2 * rho * PHY.TRA)) / .75 + PHY.TRP0 * r * r * r) / Om if Om > 1 else 0.0
 	# engine & drive
 	Qd = 0.0
@@ -155,13 +159,29 @@ func step(dt: float) -> void:
 		Qd = mi8_drive(dt, Qr + Qtr, r)
 	else:
 		r44_drive(dt, Qr + Qtr, dr)
-	# forces (body)
-	var f := n * T; var m := HUB.cross(f); f.x += Ttr
+	# forces (body). The mast/rotor rigging cancels the tail rotor's sideways push, so it is not applied.
+	var f := n * T; var m := Vector3()
 	var FD: Array = PHY.FD
 	f.x -= h5 * FD[0] * vb.x * absf(vb.x); f.y -= h5 * FD[1] * vb.y * absf(vb.y); f.z -= h5 * FD[2] * vb.z * absf(vb.z)
-	m += TRP.cross(Vector3(Ttr, 0, 0)); m.y -= DIR * Qd; m.x -= PHY.KH * a1 * r * r; m.z -= PHY.KH * b1 * r * r
-	var vt := w.cross(TAIL) + vb; var sp := absf(u) + 2
-	var fin := Vector3(-h5 * PHY.FIN * sp * vt.x, -h5 * PHY.STB * sp * vt.y, 0); f += fin; m += TAIL.cross(fin)
+	# rotor authority needs rotor RPM, hydraulics and some thrust (no lift = little control, like a real disc)
+	var lf := clampf(T / (MASS * 9.81), 0, 1.2)
+	var au := U.sstep(.45, .9, r) * (.25 + .75 * minf(lf, 1)) * (1.0 if hb >= 1 else .45)
+	var eu := euler_yxz(q); var RT: Array = HQ.rate; var TA: Array = HQ.tau; var lev: float = HQ.lev
+	# self-levelling grows with angle, so a held stick settles at a held attitude (full stick = steep, never a flip)
+	var lv := func(a: float) -> float: return lev * (a + 1.5 * a * a * a)
+	# commanded rates: + cyclic fwd = nose down (w.x < 0), + right = roll right (w.z < 0), + right pedal = yaw right (w.y < 0)
+	var wxc: float = -RT[0] * (shape(C.cy) + sv.y) - lv.call(eu.x)
+	var wzc: float = -RT[1] * (shape(C.cx) + sv.x) - lv.call(eu.z)
+	var wyc: float = -RT[2] * (shape(C.ped) + sv.z)
+	if touch: wyc *= .5
+	m.x += Ix * (wxc - w.x) / TA[0] * au
+	m.z += Iz * (wzc - w.z) / TA[1] * au
+	# torque reaction: only a change in rotor torque swings the nose (raise collective fast -> a gentle yaw to correct)
+	Qref += (Qd - Qref) * minf(1, dt / 2.5)
+	m.y += Iy * (wyc - w.y) / TA[2] * au - DIR * HQ.torq * (Qd - Qref)
+	# fin / stabiliser: weathervaning that grows with airspeed; only a whisper in the hover
+	var vt := w.cross(TAIL) + vb; var sp := absf(u) * U.sstep(3, 20, absf(u)) + .5
+	var fin := Vector3(-h5 * PHY.FIN * sp * vt.x, -h5 * PHY.STB * sp * vt.y * .3, 0); f += fin; m.y += (TAIL.cross(fin)).y
 	var D: Array = PHY.DMP
 	m.x -= w.x * D[0]; m.y -= w.y * D[1]; m.z -= w.z * D[2]
 	# ground contact: skids/tail use a static-friction anchor; wheels roll (nose wheel castors, mains brake with the parking brake)
