@@ -1,0 +1,66 @@
+# Every push to main that touches the desktop game builds it and publishes a GitHub Release.
+# The in-game updater reads manifest.json from the latest release and downloads game.pck / world.pck.
+name: Release desktop game
+
+on:
+  push:
+    branches: [main]
+    paths: ["native/**", "DESKTOP.md", ".github/workflows/release.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  GODOT: "4.4.1"
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Godot and export templates
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/godot
+            ~/.local/share/godot/export_templates
+          key: godot-${{ env.GODOT }}
+
+      - name: Install Godot
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/godot ~/.local/share/godot/export_templates
+          cd ~/godot
+          curl -sSLo g.zip https://github.com/godotengine/godot/releases/download/${GODOT}-stable/Godot_v${GODOT}-stable_linux.x86_64.zip
+          unzip -q g.zip && rm g.zip && mv Godot_v${GODOT}-stable_linux.x86_64 godot
+          curl -sSLo t.tpz https://github.com/godotengine/godot/releases/download/${GODOT}-stable/Godot_v${GODOT}-stable_export_templates.tpz
+          unzip -q t.tpz && rm t.tpz && mv templates ~/.local/share/godot/export_templates/${GODOT}.stable
+
+      - name: Flight-model tests
+        working-directory: native
+        run: |
+          export PATH=~/godot:$PATH
+          godot --headless --import >/dev/null 2>&1 || true
+          godot --headless -s tools/test_sim.gd
+
+      - name: Build
+        working-directory: native
+        run: |
+          export PATH=~/godot:$PATH
+          NOTES="$(git log -1 --pretty=%s)"
+          ./build.sh "${{ github.run_number }}" "$NOTES"
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          N=${{ github.run_number }}
+          git log -1 --pretty='%B' > notes.txt
+          gh release create "build-$N" build/release/* --title "Build $N" --notes-file notes.txt --target "${{ github.sha }}" --latest

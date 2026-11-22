@@ -4,7 +4,7 @@ A browser-based helicopter flying simulator built with three.js. Learn what ever
 
 **▶ Play in the browser:** https://yaroshitel.github.io/Helicopter-simulator-for-public-use/
 
-**🖥 Desktop app (Windows .exe / macOS .app, no browser needed):** download from [`releases/`](releases/), see [DESKTOP.md](DESKTOP.md).
+**🖥 Desktop app (Windows / macOS / Linux, no browser needed, updates itself):** download once from the [latest release](https://github.com/Yaroshitel/Helicopter-simulator-for-public-use/releases/latest), see [DESKTOP.md](DESKTOP.md).
 
 ## Helicopters
 

@@ -1,4 +1,4 @@
-# Helicopter Flying Simulator — desktop edition (Windows & macOS)
+# Helicopter Flying Simulator — desktop edition (Windows, macOS & Linux)
 
 A native desktop version of the simulator: its own game and its own app. It does **not** run in a browser and does not
 use any web engine (no Chrome, no Edge/WebView2, no Safari/WebKit, no Electron). It is built with the
@@ -9,14 +9,33 @@ Typical memory use is a few hundred MB, much less than the browser version needs
 
 ## Download & run
 
-The ready-to-run apps are in [`releases/`](releases/):
+Download the app once from the **[latest release](https://github.com/Yaroshitel/Helicopter-simulator-for-public-use/releases/latest)**:
 
 | Platform | File | How to start |
 |---|---|---|
-| Windows 10/11 (64-bit) | `releases/HelicopterSim-Windows.zip` | Unzip, double-click `HelicopterSim.exe` |
-| macOS 11+ (Apple Silicon and Intel, universal) | `releases/HelicopterSim-macOS.zip` | Unzip, drag `Helicopter Flying Simulator.app` to Applications, then open it (see below) |
+| Windows 10/11 (64-bit) | `HelicopterSim-Windows.zip` | Unzip, double-click `HelicopterSim.exe` |
+| macOS 11+ (Apple Silicon and Intel, universal) | `HelicopterSim-macOS.zip` | Unzip, drag `Helicopter Flying Simulator.app` to Applications, then open it (see below) |
+| Linux (x86-64) | `HelicopterSim-Linux.zip` | Unzip, run `./HelicopterSim.x86_64` |
 
-No installation, no internet connection and no browser are needed.
+No installation and no browser are needed, and the game runs without an internet connection.
+
+### Updates
+
+You only download the zip once. When the game starts it checks for a newer build. If there is one, it asks
+**Update / Not now**. The update downloads in a few seconds and the game starts on the new version.
+
+- Updates come in two parts: the **mechanics** (`game.pck`: flight model, cockpits, UI, sound, a few hundred KB)
+  and the **world** (`world.pck`: terrain and the valley builder, about 2.5 MB). The world is only downloaded when
+  it actually changed.
+- Downloads are checked against SHA-256 checksums before they are used. A failed or damaged download changes
+  nothing, and you can keep playing the version you have.
+- Offline, the game simply starts the newest version already on your computer.
+- If a downloaded build ever fails to start twice in a row, the game falls back to the version that came in the zip.
+- Updated files are kept in Godot's user-data folder (`%APPDATA%\Godot\app_userdata\Helicopter Flying Simulator\update`
+  on Windows, `~/Library/Application Support/Godot/app_userdata/Helicopter Flying Simulator/update` on macOS,
+  `~/.local/share/godot/app_userdata/Helicopter Flying Simulator/update` on Linux). Delete that folder to go back to
+  the version from the zip.
+- A new full download is only needed if the game engine itself is upgraded. The game tells you when that happens.
 
 **First start on Windows:** the app is not code-signed (signing needs a paid certificate), so SmartScreen may say
 "Windows protected your PC". Click **More info → Run anyway**.
@@ -73,12 +92,17 @@ The Godot project is in [`native/`](native/). You need Godot 4.4.1 and its expor
 
 ```bash
 cd native
-godot --headless --import
-godot --headless --export-release "Windows" ../build/windows/HelicopterSim.exe
-godot --headless --export-release "macOS" ../build/macos/HelicopterSim.zip
+./build.sh 0
 ```
 
-Both exports work from Windows, macOS or Linux. `native/build.sh` does the whole thing and packages the zips.
+`build.sh [build-number] [notes]` exports the three apps and the two update packs and writes `manifest.json`, all
+into `build/release/`. Exports work from Windows, macOS or Linux.
+
+**Releases are automatic.** Every push to `main` that touches `native/` runs
+[`.github/workflows/release.yml`](.github/workflows/release.yml). It runs the flight-model tests, builds
+everything and publishes a GitHub Release named `Build <n>`. Installed games pick that release up on their next
+start. The world id is a hash of the world's own files (`baked/*.bin`, `scripts/world_builder.gd`,
+`shaders/water.gdshader`), so players only download the world when one of those changed.
 The terrain is pre-baked into `native/baked/`. If you change the valley layout in `scripts/util.gd`, re-bake it with
 `godot --headless -s tools/bake_terrain.gd`.
 
