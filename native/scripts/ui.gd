@@ -63,7 +63,7 @@ func build_game(mi8: bool) -> void:
 	help = box(root); help.position = Vector2(12, 12); help.custom_minimum_size.x = 330
 	rtl(help, "[color=#ffd166][b]Controls[/b][/color] [font_size=11](H hides panels)[/font_size]\nClick the view to take the controls ([b]Esc[/b] releases the mouse)\n" +
 		"Mouse left/right = roll · forward/back = pitch (cyclic) · [b]Space[/b] centre cyclic\n[b]Hold Alt[/b] = free look: the cyclic stays put, aim the centre dot at a switch and click (right-click = turn back, hold on key BOTH = START)\n" +
-		"Collective [b]W[/b] up / [b]S[/b] down\nYaw pedals [b]A[/b] left / [b]D[/b] right · [b]X[/b] centre\nThrottle twist (R44) / correction grip (Mi-8) [b]T[/b] open / [b]G[/b] close\n" +
+		"Collective [b]W[/b] up / [b]S[/b] down\nYaw pedals [b]A[/b] left / [b]D[/b] right · [b]X[/b] centre (keyboard pedals spring back on release)\nThrottle twist (R44) / correction grip (Mi-8) [b]T[/b] open / [b]G[/b] close\n" +
 		"[b]V[/b] 1st ⇄ 3rd person · [b]C[/b] cycle cockpit/chase/orbit · wheel zoom · [b]Z[/b] reset view\n[b]N[/b] +1 hour · Pause [b]P[/b] · Reset [b]Backspace[/b] · [b]Manual M[/b] · [b]F11[/b] full screen · Gamepad supported\n" +
 		"Without capturing the mouse you can also click switches directly and drag with the right button to look.")
 	var mb := box(root); mb.anchor_left = .5; mb.anchor_right = .5; mb.offset_top = 12; mb.grow_horizontal = Control.GROW_DIRECTION_BOTH
@@ -98,8 +98,8 @@ func build_game(mi8: bool) -> void:
 	for s in ["Paused", "1 day = 24 min", "1 day = 4 min", "1 day = 24 s (demo)"]: cyc.add_item(s)
 	cyc.selected = cv.find(main.settings.cyc); cyc.item_selected.connect(func(i): main.TOD.speed = cv[i]; main.settings.cyc = cv[i]); row.call("Day/night cycle ", cyc)
 	var wind := OptionButton.new(); wind.focus_mode = Control.FOCUS_NONE
-	var wv := [0.0, 4.0, 9.0]
-	for s in ["Calm", "8 kt from 300°", "18 kt gusty"]: wind.add_item(s)
+	var wv := [0.0, 3.0, 6.0]
+	for s in ["Calm", "6 kt from 300°", "12 kt, light gusts"]: wind.add_item(s)
 	wind.selected = wv.find(main.settings.wind); wind.item_selected.connect(func(i): main.wind_spd = wv[i]; main.settings.wind = wv[i]); row.call("Wind ", wind)
 	var q := OptionButton.new(); q.focus_mode = Control.FOCUS_NONE
 	for s in ["Low", "Medium", "High"]: q.add_item(s)

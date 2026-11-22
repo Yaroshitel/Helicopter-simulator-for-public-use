@@ -2,7 +2,7 @@ extends Node3D
 ## Helicopter Flying Simulator — native desktop edition. Scene wiring, input, camera, day/night, lessons, HUD.
 
 static var aircraft := ""          # "r44" / "mi8"; survives the scene reload used to switch aircraft
-static var settings := {sens = 1.0, tod = 15.5, cyc = 1.0, wind = 4.0, sas = false, quality = 1, lesson = "start"}
+static var settings := {sens = 1.0, tod = 15.5, cyc = 1.0, wind = 3.0, sas = false, quality = 1, lesson = "start"}
 
 var sim: Sim
 var heli: HeliBase
@@ -19,7 +19,7 @@ var CTRL: Dictionary
 var LES: Dictionary
 var L := {k = "start", done = []}
 
-var paused := false; var ht := 0.0; var wind_spd := 4.0
+var paused := false; var ht := 0.0; var wind_spd := 3.0
 var cam_mode := 0; var look := {y = .1, p = -.13}; var FWD := {y = .1, p = -.13}; var orb := {a = .6, e = .3, d = 16.0}; var fov := 68.0
 var hover := ""; var keys := {}; var drag = null
 var TOD := {h = 15.5, speed = 1.0}
@@ -342,12 +342,15 @@ func input_step(dt: float) -> void:
 		var lx := Input.get_joy_axis(j, JOY_AXIS_LEFT_X)
 		if absf(lx) > .08: C.ped = clampf(lx, -1, 1)
 		C.coll = clampf(C.coll - dz.call(Input.get_joy_axis(j, JOY_AXIS_LEFT_Y)) * .4 * dt, 0, 1)
-	var rt := minf(1, dt * 12)
+	var rt := minf(1, dt * 6)   # the stick follows the mouse with a little weight
 	C.cx += (clampf(tx, -1, 1) - C.cx) * rt; C.cy += (clampf(ty, -1, 1) - C.cy) * rt
 	var K := func(k: int) -> float: return 1.0 if Input.is_physical_key_pressed(k) else 0.0
 	if not ui.typing():
 		C.coll = clampf(C.coll + (maxf(K.call(KEY_W), K.call(KEY_PAGEUP)) - maxf(K.call(KEY_S), K.call(KEY_PAGEDOWN))) * .3 * dt, 0, 1)
-		C.ped = clampf(C.ped + (K.call(KEY_D) - K.call(KEY_A)) * 1.1 * dt, -1, 1)
+		var pk: float = K.call(KEY_D) - K.call(KEY_A)
+		if pk != 0: C.ped = clampf(C.ped + pk * 1.2 * dt, -1, 1)
+		elif Input.get_connected_joypads().size() == 0 or absf(Input.get_joy_axis(Input.get_connected_joypads()[0], JOY_AXIS_LEFT_X)) <= .08:
+			C.ped = move_toward(C.ped, 0.0, 2.0 * dt)   # keyboard pedals spring back to centre (= hold heading)
 		S.twist = clampf(S.twist + (K.call(KEY_T) - K.call(KEY_G)) * .35 * dt, 0, 1)
 	var fl := captured(); var al := fl and is_alt()
 	if fl and not al:
@@ -363,7 +366,7 @@ func _process(delta: float) -> void:
 	if started:
 		input_step(dt)
 		if AUTO.has("autoplay"): _autopilot(dt)
-		var g := wind_spd * ((1 + .5 * sin(t * .7) * sin(t * 1.9)) if wind_spd > 5 else 1.0)
+		var g := wind_spd * ((1 + .2 * sin(t * .31) * sin(t * .83)) if wind_spd > 5 else 1.0)   # slow, gentle gusts
 		sim.wind = Vector3(.866 * g, 0, .5 * g)
 		if not paused and not sim.is_crashed:
 			var n := ceili(dt * 240)

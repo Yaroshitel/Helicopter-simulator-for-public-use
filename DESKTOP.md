@@ -34,7 +34,11 @@ xattr -dr com.apple.quarantine "/Applications/Helicopter Flying Simulator.app"
 Everything from the web version, ported to native code:
 
 - Robinson R44 and Mil Mi-8MTV with the same flight model (rotor RPM, governors, ground effect, translational lift,
-  torque, vortex ring state, turbine lag, autorotation, gyroscopic cross-coupling, flap-back, dynamic inflow, optional SAS)
+  torque, vortex ring state, turbine lag, autorotation, dynamic inflow, optional SAS)
+- Heavy, deliberate handling: small stick movements do little and the last part of the travel gives the real
+  authority; a held stick settles at a held attitude; the airframe's inertia makes rates build and stop gradually.
+  The tail rotor's sideways push is cancelled by the rotor rigging, and only changes in torque (a quick collective
+  pull) swing the nose. Keyboard pedals spring back to centre, which holds the heading.
 - Full cold-start and shutdown lessons that tick off automatically and highlight the next control
 - Clickable cockpits: every switch, lever and gauge explains itself (hover, or hold **Alt** and aim)
 - Live instrument panels, pilot's manual (**M**) with a live guide to every round instrument
@@ -50,7 +54,7 @@ Everything from the web version, ported to native code:
 |---|---|
 | Mouse | Cyclic (roll / pitch) — click the view to capture the mouse |
 | W / S | Collective up / down |
-| A / D | Yaw pedals left / right |
+| A / D | Yaw pedals left / right (spring back to centre on release) |
 | T / G | Throttle (R44) / correction grip (Mi-8) |
 | Hold Alt | Free look — aim the dot at a switch and click (right-click = back) |
 | V / C | 1st ⇄ 3rd person / cycle cameras |
