@@ -23,6 +23,7 @@ var paused := false; var ht := 0.0; var wind_spd := 3.0
 var cam_mode := 0; var look := {y = .1, p = -.13}; var FWD := {y = .1, p = -.13}; var orb := {a = .6, e = .3, d = 16.0}; var fov := 68.0
 var hover := ""; var keys := {}; var drag = null
 var TOD := {h = 15.5, speed = 1.0}
+const SUN_MAX := 1.0; const SUN_SHADOW := .65   # peak sun energy, shadow darkness (0 = none, 1 = black)
 var sun_dir := Vector3(.39, .62, -.68).normalized(); var light_dir := Vector3(); var moon_dir := Vector3()
 var t_now := 0.0; var pt := 0.0
 var night_lights: Array; var night_windows: Array; var traffic_cars: Array = []; var traffic_mm: Array = []
@@ -100,19 +101,20 @@ func _auto() -> void:
 func _env() -> void:
 	var we := WorldEnvironment.new(); env = Environment.new()
 	sky_mat = PhysicalSkyMaterial.new(); sky_mat.turbidity = 3.5; sky_mat.rayleigh_coefficient = 1.3; sky_mat.mie_coefficient = .004; sky_mat.mie_eccentricity = .85
-	sky_mat.sun_disk_scale = 1.5; sky_mat.energy_multiplier = 1.0; star_tex = _stars()
+	sky_mat.sun_disk_scale = 1.0; sky_mat.energy_multiplier = .9; star_tex = _stars()
 	var sk := Sky.new(); sk.sky_material = sky_mat; sk.radiance_size = Sky.RADIANCE_SIZE_128; sk.process_mode = Sky.PROCESS_MODE_INCREMENTAL
 	env.background_mode = Environment.BG_SKY; env.sky = sk
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY; env.ambient_light_energy = 1.0; env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
+	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY; env.ambient_light_energy = 1.2; env.ambient_light_sky_contribution = .55; env.ambient_light_color = Color("c4ccd6"); env.reflected_light_source = Environment.REFLECTION_SOURCE_SKY
 	env.tonemap_mode = Environment.TONE_MAPPER_ACES; env.tonemap_exposure = 1.0
 	env.fog_enabled = true; env.fog_density = .00008; env.fog_light_color = Color("b9cadb"); env.fog_sky_affect = .25; env.fog_aerial_perspective = .3
-	env.glow_enabled = true; env.glow_intensity = .5; env.glow_bloom = .02; env.glow_hdr_threshold = 1.2; env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
+	env.glow_enabled = true; env.glow_intensity = .3; env.glow_bloom = 0.0; env.glow_hdr_threshold = 1.6; env.glow_blend_mode = Environment.GLOW_BLEND_MODE_SOFTLIGHT
 	we.environment = env; add_child(we)
-	sun = DirectionalLight3D.new(); sun.shadow_enabled = true; sun.light_angular_distance = .5
+	# the sun is a pleasant extra, not a hazard: soft, half-transparent shadows and a filled-in shade side
+	sun = DirectionalLight3D.new(); sun.shadow_enabled = true; sun.light_angular_distance = .5; sun.shadow_opacity = SUN_SHADOW; sun.shadow_blur = 1.0
 	sun.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS; sun.directional_shadow_max_distance = 400
 	sun.sky_mode = DirectionalLight3D.SKY_MODE_LIGHT_AND_SKY; add_child(sun)
 	moon_l = DirectionalLight3D.new(); moon_l.light_color = Color("8ea6ff"); moon_l.light_energy = 0; moon_l.sky_mode = DirectionalLight3D.SKY_MODE_LIGHT_ONLY
-	moon_l.shadow_enabled = true; moon_l.directional_shadow_max_distance = 200; add_child(moon_l)
+	moon_l.shadow_enabled = true; moon_l.shadow_opacity = .35; moon_l.directional_shadow_max_distance = 200; add_child(moon_l)
 	var mimg := Image.create(128, 128, false, Image.FORMAT_RGBA8)
 	for y in 128:
 		for x in 128:
@@ -141,7 +143,7 @@ func apply_quality(qv: int) -> void:
 	vp.scaling_3d_scale = [.75, 1.0, 1.0][qv]
 	sun.directional_shadow_max_distance = [150.0, 400.0, 600.0][qv]
 	RenderingServer.directional_shadow_atlas_set_size([2048, 4096, 8192][qv], true)
-	env.ssao_enabled = qv == 2
+	env.ssao_enabled = qv == 2; env.ssao_intensity = 1.0; env.ssao_light_affect = 0.0
 	env.glow_enabled = qv > 0
 
 # ------------------------------------------------------------------ dynamic world
@@ -199,18 +201,20 @@ func tod_update(dt: float, t: float) -> void:
 	var y := sun_dir.y; var day := U.sstep(-.12, .18, y); var lowK := 1 - U.sstep(.03, .35, y); var up := U.sstep(-.03, .02, y); var night := 1 - U.sstep(-.22, -.02, y)
 	var st_on := night > .02
 	if (sky_mat.night_sky != null) != st_on: sky_mat.night_sky = star_tex if st_on else null
-	sky_mat.rayleigh_coefficient = 1.3 + 1.7 * lowK * up; sky_mat.mie_coefficient = .004 + .006 * lowK; sky_mat.turbidity = 3.5 + 3 * lowK
+	sky_mat.rayleigh_coefficient = 1.3 + .7 * lowK * up; sky_mat.mie_coefficient = .004 + .003 * lowK; sky_mat.turbidity = 3.5 + 1.5 * lowK
 	sun.basis = Basis.looking_at(-sun_dir, Vector3.UP if absf(sun_dir.y) < .99 else Vector3.FORWARD)
-	sun.light_color = Color("ff8c48").lerp(Color("fff0dc"), U.sstep(.03, .45, y))
-	sun.light_energy = 1.7 * U.sstep(-.03, .12, y)
+	sun.light_color = Color("ffc896").lerp(Color("fff4e6"), U.sstep(.03, .4, y))
+	sun.light_energy = SUN_MAX * U.sstep(-.03, .15, y) * (.6 + .4 * U.sstep(.08, .45, y))
+	# long low-sun shadows fade out instead of blacking out half the airfield
+	sun.shadow_opacity = SUN_SHADOW * U.sstep(-.02, .14, y)
 	sun.shadow_enabled = y > -.03
 	moon_l.basis = Basis.looking_at(-moon_dir, Vector3.UP)
 	moon_l.light_energy = .25 * night; moon_l.shadow_enabled = y <= -.03 and night > .1
 	light_dir = sun_dir if y > -.03 else moon_dir
-	env.ambient_light_energy = .35 + .65 * day
-	env.fog_light_color = Color("070b16").lerp(Color("b9cadb"), day).lerp(Color("d8a27a"), lowK * up * .6)
+	env.ambient_light_energy = .45 + .55 * day; env.ambient_light_color = Color("1c2436").lerp(Color("c4ccd6"), day)
+	env.fog_light_color = Color("070b16").lerp(Color("b9cadb"), day).lerp(Color("d8a27a"), lowK * up * .3)
 	env.tonemap_exposure = 1.0 + .5 * (1 - day)
-	if cloud_mat: cloud_mat.albedo_color = Color(.05, .06, .09).lerp(Color(1, 1, 1), day).lerp(Color(1, .62, .45), lowK * up * .7)
+	if cloud_mat: cloud_mat.albedo_color = Color(.05, .06, .09).lerp(Color(1, 1, 1), day).lerp(Color(1, .62, .45), lowK * up * .35)
 	moon.position = cam.global_position + moon_dir * 7000; moon.visible = moon_dir.y > -.05 and day < .98
 	(moon.material_override as StandardMaterial3D).albedo_color.a = 1 - day
 	var nk := 1 - U.sstep(-.02, .12, y)
@@ -218,7 +222,7 @@ func tod_update(dt: float, t: float) -> void:
 		var m: StandardMaterial3D = l[0]; m.emission_energy_multiplier = .3 + 7 * nk; m.albedo_color = (l[1] as Color) * (.3 + .7 * nk)
 	for w in night_windows: (w[0] as StandardMaterial3D).emission_energy_multiplier = w[1] * nk
 	flood.light_energy = 6.0 * nk
-	env.glow_intensity = .5 + .4 * nk
+	env.glow_intensity = .3 + .5 * nk
 	for s in smoke:
 		var g: Gradient = s.color_ramp; var cc := Color(.82, .82, .82) * (cloud_mat.albedo_color if cloud_mat else Color.WHITE)
 		for i in g.get_point_count():
