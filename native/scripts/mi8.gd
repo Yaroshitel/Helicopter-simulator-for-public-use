@@ -21,7 +21,7 @@ func _init(s: Sim) -> void:
 
 func _mats() -> void:
 	var W := 2048; var H := 1024; var rng := RandomNumberGenerator.new(); rng.seed = 8
-	var img := Image.create(W, H, false, Image.FORMAT_RGBA8); img.fill(Color("596841"))
+	var img := Image.create(W, H, false, Image.FORMAT_RGBA8); img.fill(Color("4f555a"))
 	var ell := func(cx: float, cy: float, rx: float, ry: float, c: Color):
 		for y in range(maxi(0, int(cy - ry)), mini(H, int(cy + ry) + 1)):
 			var dy := (y - cy) / ry
@@ -31,23 +31,16 @@ func _mats() -> void:
 			for xx in [x0, x0 + W, x0 - W]:
 				var a: int = maxi(0, xx); var b: int = mini(W, xx + (x1 - x0))
 				if b > a: img.fill_rect(Rect2i(a, y, b - a, 1), c)
-	for i in 150:
-		var c := Color("6f5d3d") if i % 2 else Color("45522f")
-		var x := rng.randf() * W; var y := H * rng.randf() * .5; var s := 35 + rng.randf() * 115
-		for k in 5: ell.call(x + (rng.randf() - .5) * s, y + (rng.randf() - .5) * s * .45, s * (.35 + rng.randf() * .5), s * .28 * (.5 + rng.randf()), c)
-	img.fill_rect(Rect2i(0, int(H * .54), W, int(H * .42)), Color("93a6b2"))
-	for i in 3000:
-		img.fill_rect(Rect2i(rng.randi() % W, rng.randi() % H, 1, 20 + rng.randi() % 140), Color(.11, .11, .07) if rng.randf() < .6 else Color(.6, .6, .55))
-	for u in range(0, W, 72): img.fill_rect(Rect2i(u, 0, 2, H), Color(.09, .1, .07))
-	for v in [.1, .22, .3, .62, .7, .8, .86, .93]: img.fill_rect(Rect2i(0, int((1 - v) * H), W, 2), Color(.09, .1, .07))
-	# exhaust soot along the upper sides behind the exhausts
-	for y in range(int(H * .08), int(H * .2)):
-		for x in range(int(W * .52), int(W * .86), 2):
-			if rng.randf() < .5: img.fill_rect(Rect2i(x, y, 2, 1), Color(.05, .05, .04).lerp(img.get_pixel(x, y), (x - W * .52) / (W * .34)))
-	P8 = StandardMaterial3D.new(); P8.albedo_texture = Gfx.tex(img); P8.roughness = .55; P8.normal_enabled = true; P8.normal_texture = Gfx.nmap(img, 1.0)
-	P8.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC; P8.clearcoat_enabled = true; P8.clearcoat = .4; P8.clearcoat_roughness = .3
-	OL = Gfx.mat(Color("55623d"), .62, .05)
-	M.rub = Gfx.mat(Color("141414"), .92); M.soot = Gfx.mat(Color("3a342e"), .55, .75); M.soot.cull_mode = BaseMaterial3D.CULL_DISABLED; M.gm = Gfx.mat(Color("6d756a"), .45, .7)
+	# plain dark-grey military finish (Mi-8MTV), very subtle tonal variation and panel seams
+	for i in 60:
+		var t := (rng.randf() - .5) * .035
+		ell.call(rng.randf() * W, rng.randf() * H, 80 + rng.randf() * 220, 40 + rng.randf() * 120, Color("4f555a").lightened(t) if t > 0 else Color("4f555a").darkened(-t))
+	for u in range(0, W, 96): img.fill_rect(Rect2i(u, 0, 1, H), Color("3f4448"))
+	for v in [.1, .22, .3, .62, .7, .8, .86, .93]: img.fill_rect(Rect2i(0, int((1 - v) * H), W, 1), Color("3f4448"))
+	P8 = StandardMaterial3D.new(); P8.albedo_texture = Gfx.tex(img); P8.roughness = .62; P8.normal_enabled = true; P8.normal_texture = Gfx.nmap(img, .4)
+	P8.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC; P8.clearcoat_enabled = true; P8.clearcoat = .15; P8.clearcoat_roughness = .5
+	OL = Gfx.mat(Color("4b5156"), .62, .05)
+	M.rub = Gfx.mat(Color("141414"), .92); M.soot = Gfx.mat(Color("2e2f30"), .6, .6); M.soot.cull_mode = BaseMaterial3D.CULL_DISABLED; M.gm = Gfx.mat(Color("6d756a"), .45, .7)
 	var g := StandardMaterial3D.new(); g.albedo_color = Color(.15, .24, .28, .7); g.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA; g.roughness = .04; g.metallic = .55; g.cull_mode = BaseMaterial3D.CULL_BACK
 	M.g8 = g
 	var gi := StandardMaterial3D.new(); gi.albedo_color = Color(.62, .7, .72, .1); gi.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA; gi.roughness = .05; gi.cull_mode = BaseMaterial3D.CULL_FRONT
@@ -172,13 +165,6 @@ func _fuselage() -> void:
 		for sd in [1, -1]:
 			var p := sec_pt(K8, pz, ty if sd > 0 else PI - ty, O8)
 			var t := mk(Gfx.torus(.205, .026, 32, 8), M.dark, p.x, p.y, p.z); t.rotation.z = PI / 2
-	# sliding door outline, rescue hoist
-	var dpts := func(z0: float, z1: float, th: float) -> PackedVector3Array:
-		var r := PackedVector3Array()
-		for i in 11: r.append(sec_pt(K8, z0 + (z1 - z0) * i / 10.0, th, O8))
-		return r
-	var hoist := grp(MM, -1.28, 2.88, -3.95); mk(Gfx.box(.18, .22, .3), OL, 0, 0, 0, hoist); mk(Gfx.cyl(.05, .05, .65, 12), M.steel, -.35, .05, 0, hoist).rotation.z = PI / 2
-	mk(Gfx.box(.3, .03, .5), M.steel, -1.32, .55, -3.95)
 
 func _engines() -> void:
 	var KE := [[-4.7, .05, 3.25, 3.05], [-4.5, .78, 3.68, 2.86], [-4.0, .95, 3.86, 2.86], [0, .98, 3.92, 2.86], [1.8, .92, 3.82, 2.86], [2.8, .62, 3.55, 2.88], [3.15, .04, 3.15, 2.95]]
@@ -196,29 +182,31 @@ func _engines() -> void:
 	mk(Gfx.cyl(.09, .11, .3, 16), M.soot, 1.05, 3.55, 1.4).rotation.z = PI / 2
 
 func _rotor() -> void:
-	mk(Gfx.cyl(.16, .2, .75, 32), M.chrome, 0, 4.12, 0)
+	mk(Gfx.cyl(.15, .19, .75, 32), M.steel, 0, 4.12, 0)
 	sw = grp(MM, 0, 4.0, 0)
-	mk(Gfx.cyl(.5, .5, .06, 40), M.steel, 0, 0, 0, sw); mk(Gfx.cyl(.45, .47, .05, 40), M.chrome, 0, .06, 0, sw)
-	for k in 3:
-		var a := k * 2.09; mk(Gfx.cyl(.02, .02, .5, 8), M.steel, cos(a) * .4, -.27, sin(a) * .4, sw)
+	mk(Gfx.cyl(.44, .46, .05, 40), M.steel, 0, 0, 0, sw); mk(Gfx.cyl(.4, .43, .05, 40), M.dark, 0, .055, 0, sw)
 	rT = grp(MM, 0, 4.45, 0); rS = grp(rT)
-	mk(Gfx.cyl(.34, .38, .32, 32), M.steel, 0, 0, 0, rS)
-	for y in [-.17, .17]: mk(Gfx.cyl(.5, .5, .045, 32), M.steel, 0, y, 0, rS)
-	mk(Gfx.cyl(.12, .12, .3, 16), M.chrome, 0, .3, 0, rS)
-	for k in 5:
-		var a := k * TAU / 5 + PI / 5; mk(Gfx.sphere(.06, 10, 6), M.dark, cos(a) * .33, .44, sin(a) * .33, rS)
+	# hub: forged body, lower flange, top cap
+	mk(Gfx.cyl(.27, .3, .36, 32), M.steel, 0, 0, 0, rS)
+	mk(Gfx.cyl(.33, .33, .05, 32), M.steel, 0, -.18, 0, rS)
+	mk(Gfx.cyl(.2, .26, .08, 32), M.steel, 0, .22, 0, rS)
+	mk(Gfx.sphere(.2, 24, 10, true), M.steel, 0, .26, 0, rS).scale = Vector3(1, .45, 1)
 	var bg := blade_geo(.05, 9.75, .53, .12, 120, 20, true, -.09, Color(.45, .46, .48))
 	for k in 5:
 		var az := grp(rS); az.rotation.y = k * TAU / 5
-		mk(Gfx.cyl(.075, .12, .55, 16), M.steel, .5, 0, 0, az).rotation.z = PI / 2
-		for z in [-.1, .1]: mk(Gfx.box(.16, .2, .04), M.steel, .75, 0, z, az)
-		mk(Gfx.box(.12, .05, .26), M.steel, .84, .1, 0, az); mk(Gfx.box(.12, .05, .26), M.steel, .84, -.1, 0, az)
-		mk(Gfx.cyl(.06, .06, .3, 12), M.chrome, .82, 0, 0, az)
-		mk(Gfx.cyl(.045, .045, .22, 10), M.dark, .82, .12, .2, az).rotation = Vector3(0, -.25, PI / 2)
+		# arm, flapping-hinge yoke and pin
+		mk(Gfx.box(.52, .15, .2), M.steel, .48, 0, 0, az)
+		for z in [-.1, .1]: mk(Gfx.box(.16, .2, .04), M.steel, .8, 0, z, az)
+		mk(Gfx.cyl(.03, .03, .26, 10), M.dark, .8, 0, 0, az).rotation.x = PI / 2
+		# hydraulic lag damper and pitch link
+		mk(Gfx.line_tube(Vector3(.3, .09, .14), Vector3(1.0, .05, .17), .035, 10), M.dark, 0, 0, 0, az)
+		mk(Gfx.cyl(.018, .018, .32, 8), M.steel, .42, -.23, -.14, az)
 		var cone := grp(az, .9); var pit := grp(cone)
 		var b := mk(bg, M.blade, 0, 0, 0, pit); b.rotation.x = PI
-		mk(Gfx.cyl(.085, .095, .42, 16), M.steel, .2, 0, 0, pit).rotation.z = PI / 2
-		mk(Gfx.box(.32, .07, .3), M.steel, .5, 0, 0, pit)
+		# pitch housing (axial hinge) with horn
+		mk(Gfx.cyl(.09, .1, .5, 16), M.steel, .25, 0, 0, pit).rotation.z = PI / 2
+		mk(Gfx.cyl(.07, .09, .12, 16), M.steel, .55, 0, 0, pit).rotation.z = PI / 2
+		mk(Gfx.box(.06, .04, .16), M.steel, .12, -.04, -.14, pit)
 		bl.append({cone = cone, pit = pit})
 	bz = blur_disk(10.645, rT)
 
@@ -274,8 +262,26 @@ func _cockpit() -> void:
 		mk(Gfx.box(.56, .13, .52), M.seat, x, 1.35, -5.25)
 		mk(Gfx.box(.56, .78, .12), M.seat, x, 1.8, -4.97).rotation.x = -.1
 		mk(Gfx.box(.3, .18, .09), M.seat, x, 2.32, -4.94)
-	for sd in [-1, 1]: mk(Gfx.box(.8, 2.2, .05), M.wall, sd * .83, 1.95, -4.55)
-	mk(Gfx.box(.9, .4, .05), M.wall, 0, 2.75, -4.55)
+	# cockpit rear bulkhead: follows the fuselage section, with a doorway to the cabin
+	var zb := -4.55; var outl := []
+	for i in 64:
+		var q := sec_pt(K8, zb, i / 64.0 * TAU, O8); outl.append(Vector2(q.x * .96, 1.0 + (q.y - 1.0) * .96))
+	for sd in [1, -1]:
+		var half := []
+		for q in outl:
+			if sd * q.x > 0 and q.y > .95: half.append(q)
+		half.sort_custom(func(a, b): return atan2(a.y - 1.9, sd * a.x) > atan2(b.y - 1.9, sd * b.x))
+		var poly := PackedVector2Array([Vector2(0, 2.55)])
+		for q in half: poly.append(q)
+		poly.append(Vector2(sd * .45, .95)); poly.append(Vector2(sd * .45, 2.55))
+		var tri := Geometry2D.triangulate_polygon(poly)
+		if tri.is_empty(): poly.reverse(); tri = Geometry2D.triangulate_polygon(poly)
+		var st := SurfaceTool.new(); st.begin(Mesh.PRIMITIVE_TRIANGLES)
+		for f in [.025, -.025]:
+			for k in range(0, tri.size(), 3):
+				var ids := [tri[k], tri[k + 1], tri[k + 2]] if (f > 0) == (sd > 0) else [tri[k], tri[k + 2], tri[k + 1]]
+				for ii in ids: st.add_vertex(Vector3(poly[ii].x, poly[ii].y, zb + f))
+		st.generate_normals(); mk(st.commit(), M.wall, 0, 0, 0, null, false)
 	mk(Gfx.cyl(.07, .07, .45, 12), M.red, .75, 1.28, -4.72)
 	# cargo cabin floor + troop seats
 	mk(Gfx.box(2.3, .06, 7.0), M.tread, 0, .78, -.95, null, false)
