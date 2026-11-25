@@ -390,9 +390,15 @@ func animate(dt: float, t: float) -> void:
 	ldg.light_energy = 6.0 if (el and S.ldg) else 0.0
 	if ldg_lens: ldg_lens.emission_energy_multiplier = 8.0 if (el and S.ldg) else .2
 
+var _ped_on := -1
 func redraw_panels() -> void:
+	panel_vp.render_target_update_mode = SubViewport.UPDATE_ONCE
 	pdraw.queue_redraw()
-	var pd: Control = ped_vp.get_child(0); pd.queue_redraw()
+	var on := 1 if (sim.S.avion and sim.S.elec) else 0
+	if on != _ped_on:
+		_ped_on = on
+		ped_vp.render_target_update_mode = SubViewport.UPDATE_ONCE
+		var pd: Control = ped_vp.get_child(0); pd.queue_redraw()
 
 func cam_seat() -> Vector3: return Vector3(.33, .5, -.55)
 

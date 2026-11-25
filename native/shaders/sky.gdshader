@@ -84,13 +84,13 @@ void sky() {
 	// cloud layer
 	if (EYEDIR.y > 0.004) {
 		vec2 p = EYEDIR.xz / EYEDIR.y * cloud_h + wind * cloud_time;
-		int oct = AT_CUBEMAP_PASS ? 2 : 4;
+		int oct = (AT_CUBEMAP_PASS || EYEDIR.y < 0.12) ? 2 : 4;
 		float d = cdens(p, oct);
 		if (d > 0.001) {
 			vec2 so = sd.xz / max(sd.y, 0.08);
 			so = normalize(so + 1e-5) * min(length(so), 3.0) * 140.0;
-			float d1 = cdens(p + so * 0.5, oct);
-			float d2 = cdens(p + so, oct);
+			float d1 = cdens(p + so * 0.5, 2);
+			float d2 = (AT_CUBEMAP_PASS || d < 0.15) ? d1 : cdens(p + so, 2);
 			float lt = exp(-(d1 + d2) * 1.6);                 // light that gets through the cloud towards the sun
 			float ph = 0.55 + 2.2 * hg(cos_theta, 0.62) + 0.35 * hg(cos_theta, -0.2);
 			float edge = 1.0 - smoothstep(0.0, 0.6, d);        // thin edges glow when back-lit

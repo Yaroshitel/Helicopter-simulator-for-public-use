@@ -62,8 +62,9 @@ void fragment() {
 	float macro = texture(noise_b, p / 410.0).r;
 	float big = texture(noise_b, p / 97.0 + 0.21).r;
 	float mid = nmix(noise_a, p, 9.0, macro);
-	float fine = nmix(noise_a, p, 1.7, big);
-	float micro = texture(noise_b, p / 0.45).r;
+	float fine = near_k > 0.01 ? nmix(noise_a, p, 1.7, big) : 0.5;
+	float micro_k = near_k * (1.0 - smoothstep(8.0, 60.0, dist));
+	float micro = micro_k > 0.01 ? texture(noise_b, p / 0.45).r : 0.5;
 
 	// ---- grass / meadow
 	vec3 g = base;
@@ -72,7 +73,7 @@ void fragment() {
 	g = mix(g, g * vec3(1.14, 1.04, 0.78), smoothstep(0.55, 0.8, macro) * 0.4 * mid_k);   // dry, yellowed patches
 	g = mix(g, g * vec3(0.78, 0.9, 0.8), smoothstep(0.55, 0.8, mid) * 0.5);               // lush darker clumps
 	g *= mix(1.0, 0.78 + 0.44 * fine, near_k);
-	g *= mix(1.0, 0.88 + 0.24 * micro, near_k * (1.0 - smoothstep(8.0, 60.0, dist)));
+	g *= mix(1.0, 0.88 + 0.24 * micro, micro_k);
 	float rough = 0.93;
 
 	// ---- fields: furrows along each field's own direction, grassy margins and farm tracks between fields
@@ -97,39 +98,53 @@ void fragment() {
 	}
 
 	// ---- forest floor: darker, brown leaf litter and needles
-	vec3 forest = mix(vec3(0.075, 0.08, 0.04), vec3(0.13, 0.1, 0.06), smoothstep(0.35, 0.7, mid)) * (0.75 + 0.5 * fine);
-	g = mix(g, forest, m.g * 0.65);
+	if (m.g > 0.01) {
+		vec3 forest = mix(vec3(0.075, 0.08, 0.04), vec3(0.13, 0.1, 0.06), smoothstep(0.35, 0.7, mid)) * (0.75 + 0.5 * fine);
+		g = mix(g, forest, m.g * 0.65);
+	}
 
 	// ---- gravel / sand banks along the river and the lake
-	vec3 sand = vec3(0.46, 0.42, 0.34) * (0.82 + 0.3 * fine) * (0.9 + 0.2 * micro);
-	sand = mix(sand, vec3(0.3, 0.29, 0.27) * (0.7 + 0.6 * micro), smoothstep(0.55, 0.75, mid) * 0.6);   // pebbles
-	float sw = smoothstep(0.15, 0.7, m.b);
-	g = mix(g, sand, sw);
+	float sw = 0.0;
+	if (m.b > 0.1) {
+		vec3 sand = vec3(0.46, 0.42, 0.34) * (0.82 + 0.3 * fine) * (0.9 + 0.2 * micro);
+		sand = mix(sand, vec3(0.3, 0.29, 0.27) * (0.7 + 0.6 * micro), smoothstep(0.55, 0.75, mid) * 0.6);   // pebbles
+		sw = smoothstep(0.15, 0.7, m.b);
+		g = mix(g, sand, sw);
+	}
 	float wet = 1.0 - smoothstep(-2.6, -1.2, wpos.y);
 	g *= 1.0 - wet * 0.35;
 	rough = mix(rough, 0.55, wet);
 
-	// ---- exposed rock on steep slopes (tri-planar, layered)
+	// ---- exposed rock on steep slopes (tri-planar, layered — skipped on flat ground)
 	float slope = 1.0 - N.y;
-	vec3 bw = pow(abs(N), vec3(4.0)); bw /= (bw.x + bw.y + bw.z);
-	float rn = texture(noise_a, wpos.zy / 6.0).r * bw.x + texture(noise_a, wpos.xz / 6.0).r * bw.y + texture(noise_a, wpos.xy / 6.0).r * bw.z;
-	float strata = sin(wpos.y * 1.3 + rn * 5.0) * 0.5 + 0.5;
-	vec3 rock = mix(vec3(0.27, 0.26, 0.24), vec3(0.4, 0.37, 0.32), rn) * (0.82 + 0.25 * strata);
-	float rk = smoothstep(0.2, 0.34, slope + (mid - 0.5) * 0.12);
-	g = mix(g, rock, rk * (1.0 - m.a));
-	rough = mix(rough, 0.82, rk);
+	float rk = 0.0;
+	if (slope > 0.12 && m.a < 0.99) {
+		vec3 bw = pow(abs(N), vec3(4.0)); bw /= (bw.x + bw.y + bw.z);
+		float rn = texture(noise_a, wpos.zy / 6.0).r * bw.x + texture(noise_a, wpos.xz / 6.0).r * bw.y + texture(noise_a, wpos.xy / 6.0).r * bw.z;
+		float strata = sin(wpos.y * 1.3 + rn * 5.0) * 0.5 + 0.5;
+		vec3 rock = mix(vec3(0.27, 0.26, 0.24), vec3(0.4, 0.37, 0.32), rn) * (0.82 + 0.25 * strata);
+		rk = smoothstep(0.2, 0.34, slope + (mid - 0.5) * 0.12);
+		g = mix(g, rock, rk * (1.0 - m.a));
+		rough = mix(rough, 0.82, rk);
+	}
 
 	// ---- snow on the high tops
-	vec3 snow = vec3(0.86, 0.88, 0.92) * (0.93 + 0.1 * fine);
-	float sn = smoothstep(0.2, 0.6, m.a + (mid - 0.5) * 0.3);
-	g = mix(g, snow, sn);
-	rough = mix(rough, 0.45, sn);
+	float sn = 0.0;
+	if (m.a > 0.05) {
+		vec3 snow = vec3(0.86, 0.88, 0.92) * (0.93 + 0.1 * fine);
+		sn = smoothstep(0.2, 0.6, m.a + (mid - 0.5) * 0.3);
+		g = mix(g, snow, sn);
+		rough = mix(rough, 0.45, sn);
+	}
 
-	// ---- detail normal (bumps, clods, stones) blended onto the smooth terrain normal
-	vec3 d1 = texture(detail_n, p / 2.3).rgb * 2.0 - 1.0;
-	vec3 d2 = texture(detail_n, p / 11.0 + 0.5).rgb * 2.0 - 1.0;
-	float ds = near_k * (0.5 + rk * 0.9 + sw * 0.4) * (1.0 - sn * 0.6);
-	vec3 nw = normalize(vec3(N.x + (d1.x * 0.6 + d2.x * 0.5) * ds, N.y, N.z + (d1.y * 0.6 + d2.y * 0.5) * ds));
+	// ---- detail normal (bumps, clods, stones) blended onto the smooth terrain normal — skipped at distance
+	vec3 nw = N;
+	if (near_k > 0.01) {
+		vec3 d1 = texture(detail_n, p / 2.3).rgb * 2.0 - 1.0;
+		vec3 d2 = texture(detail_n, p / 11.0 + 0.5).rgb * 2.0 - 1.0;
+		float ds = near_k * (0.5 + rk * 0.9 + sw * 0.4) * (1.0 - sn * 0.6);
+		nw = normalize(vec3(N.x + (d1.x * 0.6 + d2.x * 0.5) * ds, N.y, N.z + (d1.y * 0.6 + d2.y * 0.5) * ds));
+	}
 	NORMAL = normalize((VIEW_MATRIX * vec4(nw, 0.0)).xyz);
 
 	ALBEDO = g;

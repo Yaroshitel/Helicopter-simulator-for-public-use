@@ -501,7 +501,9 @@ func animate(dt: float, t: float) -> void:
 	for l in ldgs: l.light_energy = 8.0 if (el and S.ldg) else 0.0
 
 func redraw_panels() -> void:
-	for d in draws: d.queue_redraw()
+	# Only the main gauge panel changes dynamically; console and overhead are static (UPDATE_ONCE)
+	pn8_vp.render_target_update_mode = SubViewport.UPDATE_ONCE
+	if draws.size() > 0: draws[0].queue_redraw()
 
 func cam_seat() -> Vector3: return Vector3(-.55, .33, -5.32)
 

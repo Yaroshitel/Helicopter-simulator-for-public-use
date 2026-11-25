@@ -257,11 +257,11 @@ func blur_disk(r: float, p: Node3D) -> MeshInstance3D:
 
 ## an instrument panel rendered by a 2D Control into a texture on a quad
 func panel_quad(w: float, h: float, ps: float, p: Node3D, drawer: Control) -> SubViewport:
-	# drawn at 1.5× resolution with 4× MSAA: crisp, smooth dial markings even when you lean in
-	var vp := SubViewport.new(); vp.size = Vector2i(int(w * ps * 1.5), int(h * ps * 1.5)); vp.transparent_bg = false
-	vp.size_2d_override = Vector2i(int(w * ps), int(h * ps)); vp.size_2d_override_stretch = true; vp.msaa_2d = Viewport.MSAA_4X
-	vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS; vp.disable_3d = true
-	drawer.size = Vector2(vp.size_2d_override); vp.add_child(drawer); add_child(vp)
+	# 1.0x resolution with 2x MSAA and UPDATE_ONCE: sharp dials without re-rendering every frame
+	var vp := SubViewport.new(); vp.size = Vector2i(int(w * ps), int(h * ps)); vp.transparent_bg = false
+	vp.msaa_2d = Viewport.MSAA_2X
+	vp.render_target_update_mode = SubViewport.UPDATE_ONCE; vp.disable_3d = true
+	drawer.size = Vector2(vp.size); vp.add_child(drawer); add_child(vp)
 	var m := StandardMaterial3D.new(); m.albedo_texture = vp.get_texture(); m.roughness = .55
 	m.emission_enabled = true; m.emission_texture = vp.get_texture(); m.emission_energy_multiplier = .32
 	m.texture_filter = BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC

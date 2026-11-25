@@ -102,10 +102,11 @@ func sas_step(dt: float, r: float) -> Vector3:
 	A.sp = A.sp - dt if (on and mp < .05 * dt and (ry or A.sp <= 0)) else .5
 	if A.sc > 0: A.p = pp; A.r = rl
 	if A.sp > 0: A.y = y
-	var hold := func(x: float) -> float: return 0.0 if A.sc > 0 else x
 	var R0: Array = HQ.rate; var lim: Array = PHY.SAS.A
-	var ty := clampf((1.2 * hold.call(pp - A.p) + .5 * w.x) / R0[0], -lim[0], lim[0]) if on else 0.0
-	var tx := clampf((1.2 * hold.call(rl - A.r) + .5 * w.z) / R0[1], -lim[1], lim[1]) if on else 0.0
+	var dp := 0.0 if A.sc > 0 else (pp - A.p)
+	var dr := 0.0 if A.sc > 0 else (rl - A.r)
+	var ty := clampf((1.2 * dp + .5 * w.x) / R0[0], -lim[0], lim[0]) if on else 0.0
+	var tx := clampf((1.2 * dr + .5 * w.z) / R0[1], -lim[1], lim[1]) if on else 0.0
 	var tz := 0.0
 	if on and lim[2] > 0:
 		tz = clampf((.8 * (0.0 if A.sp > 0 else U.wrap_a(y - A.y)) + .5 * w.y) / R0[2], -lim[2], lim[2])
@@ -168,10 +169,11 @@ func step(dt: float) -> void:
 	var au := U.sstep(.45, .9, r) * (.25 + .75 * minf(lf, 1)) * (1.0 if hb >= 1 else .45)
 	var eu := euler_yxz(q); var RT: Array = HQ.rate; var TA: Array = HQ.tau; var lev: float = HQ.lev
 	# self-levelling grows with angle, so a held stick settles at a held attitude (full stick = steep, never a flip)
-	var lv := func(a: float) -> float: return lev * (a + 1.5 * a * a * a)
+	var lvx := lev * (eu.x + 1.5 * eu.x * eu.x * eu.x)
+	var lvz := lev * (eu.z + 1.5 * eu.z * eu.z * eu.z)
 	# commanded rates: + cyclic fwd = nose down (w.x < 0), + right = roll right (w.z < 0), + right pedal = yaw right (w.y < 0)
-	var wxc: float = -RT[0] * (shape(C.cy) + sv.y) - lv.call(eu.x)
-	var wzc: float = -RT[1] * (shape(C.cx) + sv.x) - lv.call(eu.z)
+	var wxc: float = -RT[0] * (shape(C.cy) + sv.y) - lvx
+	var wzc: float = -RT[1] * (shape(C.cx) + sv.x) - lvz
 	var wyc: float = -RT[2] * (shape(C.ped) + sv.z)
 	if touch: wyc *= .5
 	m.x += Ix * (wxc - w.x) / TA[0] * au
@@ -186,33 +188,37 @@ func step(dt: float) -> void:
 	m.x -= w.x * D[0]; m.y -= w.y * D[1]; m.z -= w.z * D[2]
 	# ground contact: skids/tail use a static-friction anchor; wheels roll (nose wheel castors, mains brake with the parking brake)
 	var Fw := q * f; var K: Array = PHY.kc; var K0: float = K[0]; var K1: float = K[1]; var K2: float = K[2]; var K3: float = K[3]
+	var gh_c := U.ground_h(p.x, p.z)
+	agl = p.y - gh_c - PHY.agl0
 	touch = false
-	for c in CPTS:
-		var pw: Vector3 = q * c.r + p; var pen := U.ground_h(pw.x, pw.z) - pw.y
-		if pen <= 0:
-			c.anc = null; continue
-		touch = true
-		var vp: Vector3 = q * w.cross(c.r) + v
-		var fn := maxf(0, K0 * pen - K1 * vp.y); var lim := .55 * fn; var fc: Vector3
-		if c.t == "n" or (c.t == "w" and not S.get("pbrake", false)):
-			c.anc = null
-			var vpb := qi * vp; var fl := K3 * 4 if c.t == "w" else K3 * .08
-			fc = q * Vector3(clampf(-fl * vpb.x, -lim, lim), 0, clampf(-2000 * vpb.z, -.03 * fn, .03 * fn)); fc.y = fn
-		else:
-			if c.anc == null: c.anc = pw
-			var fx: float = -K2 * (pw.x - c.anc.x) - K3 * vp.x; var fz: float = -K2 * (pw.z - c.anc.z) - K3 * vp.z
-			var ft := Vector2(fx, fz).length()
-			if ft > lim:
-				fx *= lim / ft; fz *= lim / ft; c.anc = pw
-			fc = Vector3(fx, fn, fz)
-		Fw += fc; m += c.r.cross(qi * fc)
-		if vp.y < (-2.2 if c.t == "t" else PHY.vyLim):
-			crash("Tail rotor / tail bumper strike" if c.t == "t" else "Hard landing (%d ft/min)" % roundi(-vp.y * 197))
-		if c.t == "" and Vector2(vp.x, vp.z).length() > 13: crash("Skids caught the ground at speed — rollover")
+	if agl < 25.0:
+		for c in CPTS:
+			var pw: Vector3 = q * c.r + p; var pen := U.ground_h(pw.x, pw.z) - pw.y
+			if pen <= 0:
+				c.anc = null; continue
+			touch = true
+			var vp: Vector3 = q * w.cross(c.r) + v
+			var fn := maxf(0, K0 * pen - K1 * vp.y); var lim := .55 * fn; var fc: Vector3
+			if c.t == "n" or (c.t == "w" and not S.get("pbrake", false)):
+				c.anc = null
+				var vpb := qi * vp; var fl := K3 * 4 if c.t == "w" else K3 * .08
+				fc = q * Vector3(clampf(-fl * vpb.x, -lim, lim), 0, clampf(-2000 * vpb.z, -.03 * fn, .03 * fn)); fc.y = fn
+			else:
+				if c.anc == null: c.anc = pw
+				var fx: float = -K2 * (pw.x - c.anc.x) - K3 * vp.x; var fz: float = -K2 * (pw.z - c.anc.z) - K3 * vp.z
+				var ft := Vector2(fx, fz).length()
+				if ft > lim:
+					fx *= lim / ft; fz *= lim / ft; c.anc = pw
+				fc = Vector3(fx, fn, fz)
+			Fw += fc; m += c.r.cross(qi * fc)
+			if vp.y < (-2.2 if c.t == "t" else PHY.vyLim):
+				crash("Tail rotor / tail bumper strike" if c.t == "t" else "Hard landing (%d ft/min)" % roundi(-vp.y * 197))
+			if c.t == "" and Vector2(vp.x, vp.z).length() > 13: crash("Skids caught the ground at speed — rollover")
+	else:
+		for c in CPTS: c.anc = null
 	if touch:
 		var e := euler_yxz(q)
 		if absf(e.z) > .55 or e.x < -.5 or e.x > .6: crash("Dynamic rollover — blades struck the ground")
-	agl = p.y - U.ground_h(p.x, p.z) - PHY.agl0
 	if not MI8 and agl > 2 and T < .15 * MASS * 9.81 and r > .8 and absf(w.z) > .7: crash("Mast bumping (low-G + roll)")
 	Fw.y -= MASS * 9.81; v += Fw * (dt / MASS); p += v * dt
 	w.x += m.x / Ix * dt; w.y += m.y / Iy * dt; w.z += m.z / Iz * dt

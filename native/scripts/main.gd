@@ -25,7 +25,7 @@ var hover := ""; var keys := {}; var drag = null
 var TOD := {h = 15.5, speed = 1.0}
 const SUN_MAX := 1.0; const SUN_SHADOW := .65   # peak sun energy, shadow darkness (0 = none, 1 = black)
 var sun_dir := Vector3(.39, .62, -.68).normalized(); var light_dir := Vector3(); var moon_dir := Vector3()
-var t_now := 0.0; var pt := 0.0
+var t_now := 0.0; var pt := 0.0; var _last_tod := -1.0; var _last_cloud_t := -1.0; var _last_cam_mode := -1; var _panels_t := 0.0
 var night_lights: Array; var night_windows: Array; var traffic_cars: Array = []; var traffic_mm: Array = []
 var smoke: Array = []; var cloud_col := Color.WHITE; var flood: SpotLight3D; var sock_arm: Node3D
 var started := false
@@ -54,25 +54,27 @@ func _build_scene(a: String, preview: bool) -> void:
 	sim.crashed.connect(func(m): if AUTO.has("autoplay"): print("CRASH: ", m, " euler ", Sim.euler_yxz(sim.q), " v ", sim.v)
 	)
 	sim.crashed.connect(func(m): ui.show_msg("💥 " + m + "\n[font_size=15]Backspace to reset[/font_size]"))
-	_env()
-	world = WorldBuilder.new().build(); add_child(world)
-	night_lights = world.get_meta("night_lights"); night_windows = world.get_meta("night_windows")
-	flood = world.get_node("Flood"); sock_arm = world.get_node("Sock/Arm")
-	_traffic(world.get_meta("traffic")); _smoke(world.get_meta("smoke"))
-	grass = world.get_meta("grass") if world.has_meta("grass") else null
+	if world == null:
+		_env()
+		world = WorldBuilder.new().build(); add_child(world)
+		night_lights = world.get_meta("night_lights"); night_windows = world.get_meta("night_windows")
+		flood = world.get_node("Flood"); sock_arm = world.get_node("Sock/Arm")
+		_traffic(world.get_meta("traffic")); _smoke(world.get_meta("smoke"))
+		grass = world.get_meta("grass") if world.has_meta("grass") else null
+		cam = Camera3D.new(); cam.near = .03; cam.far = 12000; cam.fov = 68; add_child(cam); cam.current = true
 	heli = Mi8.new(sim) if mi8 else R44.new(sim)
 	add_child(heli)
-	cam = Camera3D.new(); cam.near = .03; cam.far = 12000; cam.fov = 68; add_child(cam); cam.current = true
 	FWD = {y = -.06, p = -.12} if mi8 else {y = .1, p = -.13}; look = FWD.duplicate(); orb.d = 34.0 if mi8 else 16.0
 	CTRL = Catalog.build(sim)
 	LES = Catalog.lessons(sim, func(): return ht)
 	TOD.h = settings.tod; TOD.speed = settings.cyc; wind_spd = settings.wind
+	_last_tod = -1.0; _last_cam_mode = -1
 	apply_quality(settings.quality)
 	if preview:
-		cam_mode = 2; orb = {a = .9, e = .18, d = 13.0}
+		started = false; cam_mode = 2; orb = {a = .9, e = .18, d = 13.0}
 		sim.quick()
 		return
-	started = true
+	started = true; cam_mode = 0
 	audio = SimAudio.new(); audio.sim = sim; add_child(audio)
 	ui.build_game(mi8)
 	reset()
@@ -176,33 +178,39 @@ func _stars() -> ImageTexture:
 func apply_quality(qv: int) -> void:
 	settings.quality = qv
 	var vp := get_viewport()
-	vp.msaa_3d = [Viewport.MSAA_DISABLED, Viewport.MSAA_2X, Viewport.MSAA_4X][qv]
+	vp.msaa_3d = [Viewport.MSAA_DISABLED, Viewport.MSAA_2X, Viewport.MSAA_2X][qv]
 	vp.scaling_3d_scale = [.75, 1.0, 1.0][qv]
 	vp.screen_space_aa = Viewport.SCREEN_SPACE_AA_FXAA if qv == 0 else Viewport.SCREEN_SPACE_AA_DISABLED
 	vp.use_debanding = qv > 0
-	sun.directional_shadow_max_distance = [180.0, 450.0, 700.0][qv]
+	sun.directional_shadow_max_distance = [150.0, 320.0, 500.0][qv]
 	sun.directional_shadow_split_1 = .06; sun.directional_shadow_split_2 = .18; sun.directional_shadow_split_3 = .45
 	sun.directional_shadow_blend_splits = qv > 0
-	RenderingServer.directional_shadow_atlas_set_size([2048, 4096, 8192][qv], true)
-	RenderingServer.directional_soft_shadow_filter_set_quality([RenderingServer.SHADOW_QUALITY_SOFT_LOW, RenderingServer.SHADOW_QUALITY_SOFT_MEDIUM, RenderingServer.SHADOW_QUALITY_SOFT_HIGH][qv])
-	RenderingServer.positional_soft_shadow_filter_set_quality([RenderingServer.SHADOW_QUALITY_SOFT_LOW, RenderingServer.SHADOW_QUALITY_SOFT_MEDIUM, RenderingServer.SHADOW_QUALITY_SOFT_HIGH][qv])
-	# ambient occlusion in creases (medium+), bounced light (high), reflections on water and glass (high)
+	RenderingServer.directional_shadow_atlas_set_size([1024, 2048, 4096][qv], true)
+	RenderingServer.directional_soft_shadow_filter_set_quality([RenderingServer.SHADOW_QUALITY_SOFT_VERY_LOW, RenderingServer.SHADOW_QUALITY_SOFT_LOW, RenderingServer.SHADOW_QUALITY_SOFT_MEDIUM][qv])
+	RenderingServer.positional_soft_shadow_filter_set_quality([RenderingServer.SHADOW_QUALITY_SOFT_VERY_LOW, RenderingServer.SHADOW_QUALITY_SOFT_LOW, RenderingServer.SHADOW_QUALITY_SOFT_MEDIUM][qv])
+	# ambient occlusion in creases (medium+), bounced light & reflections (high, tuned for smooth frame times)
 	env.ssao_enabled = qv >= 1; env.ssao_radius = 1.2; env.ssao_intensity = 1.6; env.ssao_power = 1.4; env.ssao_detail = .6; env.ssao_light_affect = .1; env.ssao_ao_channel_affect = .4
-	RenderingServer.environment_set_ssao_quality([RenderingServer.ENV_SSAO_QUALITY_VERY_LOW, RenderingServer.ENV_SSAO_QUALITY_MEDIUM, RenderingServer.ENV_SSAO_QUALITY_HIGH][qv], true, .5, 2, 50, 300)
-	env.ssil_enabled = qv == 2; env.ssil_radius = 4.0; env.ssil_intensity = .8
-	env.ssr_enabled = qv == 2; env.ssr_max_steps = 48; env.ssr_fade_in = .2; env.ssr_fade_out = 2.0; env.ssr_depth_tolerance = .4
+	RenderingServer.environment_set_ssao_quality([RenderingServer.ENV_SSAO_QUALITY_VERY_LOW, RenderingServer.ENV_SSAO_QUALITY_VERY_LOW, RenderingServer.ENV_SSAO_QUALITY_MEDIUM][qv], true, .5, 2, 50, 300)
+	env.ssil_enabled = qv == 2; env.ssil_radius = 3.5; env.ssil_intensity = .75
+	env.ssr_enabled = qv == 2; env.ssr_max_steps = 24; env.ssr_fade_in = .2; env.ssr_fade_out = 2.0; env.ssr_depth_tolerance = .4
 	env.glow_enabled = qv > 0
 	sky_mat.set_shader_parameter("exposure", .9)
 	if world and world.has_meta("terrain_mat"):
-		(world.get_meta("terrain_mat") as ShaderMaterial).set_shader_parameter("detail_k", [.6, .85, 1.0][qv])
+		(world.get_meta("terrain_mat") as ShaderMaterial).set_shader_parameter("detail_k", [.5, .8, 1.0][qv])
 	if grass:
-		var gr: float = [16.0, 28.0, 40.0][qv]
-		var n := 0; var sp: float = (grass.material_override as ShaderMaterial).get_shader_parameter("spacing")
-		n = mini(grass.multimesh.instance_count, int(PI * gr * gr / (sp * sp)))
+		var gr: float = [14.0, 24.0, 34.0][qv]
+		var sp: float = (grass.material_override as ShaderMaterial).get_shader_parameter("spacing")
+		var n := mini(grass.multimesh.instance_count, int(PI * gr * gr / (sp * sp)))
 		grass.multimesh.visible_instance_count = n
 		(grass.material_override as ShaderMaterial).set_shader_parameter("radius", gr)
 	if world:
-		for n in world.get_tree().get_nodes_in_group("lod_far"): (n as GeometryInstance3D).visibility_range_end = [2500.0, 4500.0, 7000.0][qv]
+		var near_end: float = [220.0, 380.0, 520.0][qv]
+		var far_end: float = [2500.0, 4500.0, 7000.0][qv]
+		var tree_sh := GeometryInstance3D.SHADOW_CASTING_SETTING_ON if qv > 0 else GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+		for n in world.get_tree().get_nodes_in_group("lod_near"):
+			var gi := n as GeometryInstance3D; gi.visibility_range_end = near_end; gi.cast_shadow = tree_sh
+		for n in world.get_tree().get_nodes_in_group("lod_far"):
+			var gi := n as GeometryInstance3D; gi.visibility_range_begin = near_end - 10.0; gi.visibility_range_end = far_end
 
 # ------------------------------------------------------------------ dynamic world
 func _traffic(lanes: Array) -> void:
@@ -268,6 +276,14 @@ func _smoke(src: Array) -> void:
 # ------------------------------------------------------------------ day / night (latitude 50° N, early summer)
 func tod_update(dt: float, t: float) -> void:
 	TOD.h = fposmod(TOD.h + dt * TOD.speed / 60.0, 24.0)
+	# Throttle cloud_time (~15 Hz) so Sky incremental radiance cubemap doesn't re-bake every single frame
+	if t - _last_cloud_t >= .066 or _last_cloud_t < 0.0:
+		_last_cloud_t = t
+		sky_mat.set_shader_parameter("cloud_time", t)
+	if _last_tod >= 0.0 and absf(TOD.h - _last_tod) < .002:
+		moon.position = cam.global_position + moon_dir * 7000
+		return
+	_last_tod = TOD.h
 	var H: float = (TOD.h - 12) / 12 * PI; var cd := cos(DEC); var sd := sin(DEC)
 	sun_dir = Vector3(-cd * sin(H), sd * sin(LAT) + cd * cos(LAT) * cos(H), -(sd * cos(LAT) - cd * sin(LAT) * cos(H))).normalized()
 	moon_dir = Vector3(-sun_dir.x * .9 + .25, absf(sun_dir.y) * .8 + .15, -sun_dir.z * .9).normalized()
@@ -292,7 +308,6 @@ func tod_update(dt: float, t: float) -> void:
 	sky_mat.set_shader_parameter("cloud_lit", Vector3(sc.r, sc.g, sc.b) + Vector3(.03, .04, .07) * night)
 	var sh := Color(.035, .04, .06).lerp(Color(.5, .55, .64), day).lerp(Color(.55, .42, .42), lowK * up * .5)
 	sky_mat.set_shader_parameter("cloud_shade", Vector3(sh.r, sh.g, sh.b))
-	sky_mat.set_shader_parameter("cloud_time", t)
 	moon.position = cam.global_position + moon_dir * 7000; moon.visible = moon_dir.y > -.05 and day < .98
 	(moon.material_override as StandardMaterial3D).albedo_color.a = 1 - day
 	var nk := 1 - U.sstep(-.02, .12, y)
@@ -306,7 +321,7 @@ func tod_update(dt: float, t: float) -> void:
 		for i in g.get_point_count():
 			var c := g.get_color(i); g.set_color(i, Color(cc.r, cc.g, cc.b, c.a))
 		s.direction = Vector3(sim.wind.x * .3, 1, sim.wind.z * .3).normalized()
-	if ui and ui.has_method("tod_ui") and t - pt > 0: ui.tod_ui(TOD.h)
+	if ui and ui.has_method("tod_ui"): ui.tod_ui(TOD.h)
 
 # ------------------------------------------------------------------ lessons
 func set_lesson(k: String) -> void:
@@ -483,9 +498,13 @@ func _process(delta: float) -> void:
 	sock_arm.rotation = Vector3(-PI / 2 * (1 - U.sstep(0, 7, ws)) * .85, atan2(sim.wind.x, sim.wind.z), 0)
 	_upd_traffic(dt)
 	_upd_grass()
+	if t - _panels_t > .05 or cam_mode != _last_cam_mode:
+		if cam_mode == 0 or _last_cam_mode < 0:
+			_panels_t = t
+			heli.redraw_panels()
+		_last_cam_mode = cam_mode
 	if t - pt > .033:
 		pt = t
-		heli.redraw_panels()
 		if started:
 			lesson_tick(t)
 			if audio: audio.update(cam_mode == 0, cam.global_position.distance_to(sim.p))
@@ -497,7 +516,20 @@ func _process(delta: float) -> void:
 
 func switch_aircraft(a: String) -> void:
 	aircraft = a
-	get_tree().reload_current_scene()
+	Input.mouse_mode = Input.MOUSE_MODE_VISIBLE
+	paused = false; ht = 0.0; hover = ""; keys.clear(); drag = null; fov = 68.0
+	if audio:
+		remove_child(audio); audio.queue_free(); audio = null
+	if heli:
+		remove_child(heli); heli.queue_free(); heli = null
+	if ui:
+		remove_child(ui); ui.queue_free()
+	ui = UI.new(); ui.main = self; add_child(ui)
+	if a == "":
+		ui.show_start()
+		_build_scene("r44", true)
+	else:
+		_build_scene(a, false)
 
 # ------------------------------------------------------------------ test autopilot: flies the current lesson through the real controls
 var _ap_low := 0.0; var _ap_trim := 0.0; var _ap_t := 0.0; var _ap_last := -1; var _ap_clock := 0.0; var _ap_log := 0.0

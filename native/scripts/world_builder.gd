@@ -539,7 +539,7 @@ func _town() -> void:
 		var LL := []
 		for i in range(v, CF.size(), 2): LL.append(CF[i])
 		multi_lod(con[v], cfar, LL)
-	# vineyard rows west of the airfield
+	# vineyard rows west of the airfield (merged 3-bush clusters for 3x fewer instances)
 	var V2 := []; var posts := []
 	z = 210.0
 	while z < 690:
@@ -548,14 +548,18 @@ func _town() -> void:
 			if rnd() >= .06:
 				var y := G(x, z)
 				if absf(G(x + 3, z) - y) <= 2:
-					V2.append({x = x, y = y, z = z, ry = 0.0, sx = R(.8, 1.1), sy = R(.8, 1.15), sz = 1.0, c = Color.from_hsv(R(.2, .26), .5, R(.25, .35))})
-					if V2.size() % 6 == 0: posts.append({x = x, y = y, z = z})
-			x += 1.7
-		z += 2.8
-	var vm := Gfx.merge([[Gfx.sphere(.7, 10, 6), Gfx.xf(Vector3(0, .95, 0), Vector3.ZERO, Vector3(1, 1.1, .55))]])
-	var vmi := Gfx.multi(root, vm, null, V2, false); vmi.material_override = foliage_mat(.35, 0.0, 0.0)
-	vmi.visibility_range_end = 1600; vmi.visibility_range_end_margin = 200; vmi.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
-	Gfx.multi(root, Gfx.merge([[Gfx.box(.07, 1.7, .07), Gfx.xf(Vector3(0, .85, 0))]]), Gfx.mat(Gfx.hexc(0x6b5a44), 1), posts, false).visibility_range_end = 900
+					V2.append({x = x, y = y, z = z, ry = 0.0, sx = R(.85, 1.1), sy = R(.8, 1.15), sz = 1.0, c = Color.from_hsv(R(.2, .26), .5, R(.25, .35))})
+					if V2.size() % 2 == 0: posts.append({x = x, y = y, z = z})
+			x += 5.1
+		z += 3.0
+	var vm := Gfx.merge([
+		[Gfx.sphere(.7, 6, 4), Gfx.xf(Vector3(-1.7, .95, 0), Vector3.ZERO, Vector3(1.1, 1.1, .55))],
+		[Gfx.sphere(.7, 6, 4), Gfx.xf(Vector3(0, .95, 0), Vector3.ZERO, Vector3(1.1, 1.1, .55))],
+		[Gfx.sphere(.7, 6, 4), Gfx.xf(Vector3(1.7, .95, 0), Vector3.ZERO, Vector3(1.1, 1.1, .55))]
+	])
+	var vmi := Gfx.multi(root, vm, null, V2, false); vmi.material_override = _leaf_far_mat(false)
+	vmi.visibility_range_end = 1400
+	Gfx.multi(root, Gfx.merge([[Gfx.box(.07, 1.7, .07), Gfx.xf(Vector3(0, .85, 0))]]), Gfx.mat(Gfx.hexc(0x6b5a44), 1), posts, false).visibility_range_end = 700
 	_church(); _powerline()
 
 
@@ -565,6 +569,14 @@ func foliage_mat(clump := .9, needle := 0.0, sway := 1.0, sway_h := 3.0) -> Shad
 	m.set_shader_parameter("noise_t", noise_tex("a")); m.set_shader_parameter("noise_n", noise_tex("n"))
 	m.set_shader_parameter("clump", clump); m.set_shader_parameter("needle", needle); m.set_shader_parameter("sway", sway); m.set_shader_parameter("sway_h", sway_h)
 	return m
+
+func _leaf_far_mat(needle: bool) -> ShaderMaterial:
+	var k := "leafNF" if needle else "leafDF"
+	if not _T.has(k):
+		var m := ShaderMaterial.new(); m.shader = load("res://shaders/world/foliage_far.gdshader")
+		m.set_shader_parameter("noise_t", noise_tex("a")); m.set_shader_parameter("clump", 2.0); m.set_shader_parameter("needle", 1.0 if needle else 0.0)
+		_T[k] = m
+	return _T[k]
 
 func bark_mat() -> StandardMaterial3D:
 	if not _T.has("bark"):
@@ -592,20 +604,20 @@ func lumpy(mesh: ArrayMesh, amp: float, freq: float, seed_: int) -> ArrayMesh:
 func deciduous(v: int) -> ArrayMesh:
 	var r := RandomNumberGenerator.new(); r.seed = 100 + v
 	var blobs := []
-	var nb := 7 + v * 2
+	var nb := 6 + v
 	for i in nb:
 		var a := r.randf() * TAU; var rr := r.randf_range(.4, 1.0) * (0.0 if i == 0 else 2.2)
 		var c := Vector3(cos(a) * rr, 6.4 + r.randf_range(-1.3, 1.5) - rr * .25, sin(a) * rr)
-		var s := r.randf_range(1.2, 1.9) * (1.35 if i == 0 else 1.0)
-		blobs.append([Gfx.sphere(1, 11, 7), Gfx.xf(c, Vector3(r.randf(), r.randf() * 3, 0), Vector3(s * 1.05, s * .85, s))])
+		var s := r.randf_range(1.25, 1.95) * (1.35 if i == 0 else 1.0)
+		blobs.append([Gfx.sphere(1, 8, 5), Gfx.xf(c, Vector3(r.randf(), r.randf() * 3, 0), Vector3(s * 1.05, s * .85, s))])
 	var crown := lumpy(Gfx.merge(blobs), .38, .55, v)
 	var wood := []
-	wood.append([Gfx.cyl(.15, .28, 5.2, 9), Gfx.xf(Vector3(0, 2.6, 0))])
-	wood.append([Gfx.cyl(.3, .4, .5, 9), Gfx.xf(Vector3(0, .2, 0))])
+	wood.append([Gfx.cyl(.15, .28, 5.2, 7), Gfx.xf(Vector3(0, 2.6, 0))])
+	wood.append([Gfx.cyl(.3, .4, .5, 7), Gfx.xf(Vector3(0, .2, 0))])
 	for i in 4:
 		var a := i * TAU / 4 + r.randf() * .8
 		var top := Vector3(cos(a) * 1.6, 6.3 + r.randf(), sin(a) * 1.6)
-		wood.append([Gfx.line_tube(Vector3(0, 3.6 + i * .35, 0), top, .09, 6), Transform3D()])
+		wood.append([Gfx.line_tube(Vector3(0, 3.6 + i * .35, 0), top, .09, 5), Transform3D()])
 	var trunk := Gfx.merge(wood)
 	var am := ArrayMesh.new()
 	am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, trunk.surface_get_arrays(0)); am.surface_set_material(0, bark_mat())
@@ -621,7 +633,7 @@ func _leaf_mat(needle: bool) -> ShaderMaterial:
 func conifer(v: int) -> ArrayMesh:
 	var r := RandomNumberGenerator.new(); r.seed = 200 + v
 	var st := SurfaceTool.new(); st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var tiers := 7; var H := 11.5; var spikes := 13
+	var tiers := 6; var H := 11.5; var spikes := 9
 	for k in tiers:
 		var t := float(k) / tiers
 		var y0 := 1.8 + t * (H - 3.0); var top := y0 + 2.6 - t * .6
@@ -639,7 +651,7 @@ func conifer(v: int) -> ArrayMesh:
 			for p in [cen, a, b]: st.add_vertex(p)
 	st.generate_normals()
 	var fol := lumpy(st.commit(), .18, 1.2, 300 + v)
-	var trunk := Gfx.merge([[Gfx.cyl(.08, .26, H, 8), Gfx.xf(Vector3(0, H / 2, 0))]])
+	var trunk := Gfx.merge([[Gfx.cyl(.08, .26, H, 6), Gfx.xf(Vector3(0, H / 2, 0))]])
 	var am := ArrayMesh.new()
 	am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, trunk.surface_get_arrays(0)); am.surface_set_material(0, bark_mat())
 	am.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, fol.surface_get_arrays(0)); am.surface_set_material(1, _leaf_mat(true))
@@ -647,13 +659,13 @@ func conifer(v: int) -> ArrayMesh:
 
 func far_tree(con: bool) -> ArrayMesh:
 	var m: ArrayMesh
-	if con: m = Gfx.merge([[Gfx.cone(2.5, 10.5, 6), Gfx.xf(Vector3(0, 6.2, 0))]])
-	else: m = Gfx.merge([[Gfx.sphere(1, 8, 5), Gfx.xf(Vector3(0, 6.6, 0), Vector3.ZERO, Vector3(3.2, 2.7, 3.2))], [Gfx.cyl(.2, .3, 4.5, 4, true), Gfx.xf(Vector3(0, 2.2, 0))]])
-	m.surface_set_material(0, _leaf_mat(con))
+	if con: m = Gfx.merge([[Gfx.cone(2.5, 10.5, 5), Gfx.xf(Vector3(0, 6.2, 0))]])
+	else: m = Gfx.merge([[Gfx.sphere(1, 6, 4), Gfx.xf(Vector3(0, 6.6, 0), Vector3.ZERO, Vector3(3.2, 2.7, 3.2))], [Gfx.cyl(.2, .3, 4.5, 4, true), Gfx.xf(Vector3(0, 2.2, 0))]])
+	m.surface_set_material(0, _leaf_far_mat(con))
 	return m
 
-## splits instances into square cells: detailed trees near the camera, simple ones further out, cross-faded
-func multi_lod(near: Mesh, far: Mesh, L: Array, cell := 500.0, near_end := 750.0) -> void:
+## splits instances into square cells: detailed trees near the camera, simple ones further out
+func multi_lod(near: Mesh, far: Mesh, L: Array, cell := 450.0, near_end := 450.0) -> void:
 	var C := {}
 	for q in L:
 		var k := Vector2i(floori(q.x / cell), floori(q.z / cell))
@@ -661,10 +673,9 @@ func multi_lod(near: Mesh, far: Mesh, L: Array, cell := 500.0, near_end := 750.0
 		C[k].append(q)
 	for k in C:
 		var a := Gfx.multi(root, near, null, C[k], true)
-		a.visibility_range_end = near_end; a.visibility_range_end_margin = 150; a.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF
+		a.visibility_range_end = near_end; a.add_to_group("lod_near", true)
 		var b := Gfx.multi(root, far, null, C[k], false)
-		b.visibility_range_begin = near_end; b.visibility_range_begin_margin = 150; b.visibility_range_end = 7000; b.visibility_range_end_margin = 500
-		b.visibility_range_fade_mode = GeometryInstance3D.VISIBILITY_RANGE_FADE_SELF; b.add_to_group("lod_far", true)
+		b.visibility_range_begin = near_end - 10.0; b.visibility_range_end = 7000; b.add_to_group("lod_far", true)
 
 # ---------------- grass ----------------
 var excl: Image
@@ -681,13 +692,13 @@ func ex_line(P: Array, w: float) -> void:
 			var p := a.lerp(b, float(k) / n); ex_rect(p.x - w / 2, p.y - w / 2, p.x + w / 2, p.y + w / 2)
 
 func _grass() -> void:
-	# one clump: five tapered, curved blades
+	# one clump: 7 tapered, curved blades (2 segments each: 28 tris vs 84 previously)
 	var st := SurfaceTool.new(); st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	var r := RandomNumberGenerator.new(); r.seed = 77
-	for b in 14:
+	for b in 7:
 		var a := r.randf() * TAU; var dir := Vector3(cos(a), 0, sin(a)); var side := Vector3(-dir.z, 0, dir.x)
-		var o := Vector3(r.randf_range(-.24, .24), 0, r.randf_range(-.24, .24)); var h := r.randf_range(.16, .42); var w := r.randf_range(.011, .02); var lean := r.randf_range(.05, .2)
-		var segs := 3; var prev := []
+		var o := Vector3(r.randf_range(-.26, .26), 0, r.randf_range(-.26, .26)); var h := r.randf_range(.18, .44); var w := r.randf_range(.016, .028); var lean := r.randf_range(.05, .2)
+		var segs := 2; var prev := []
 		for sgi in segs + 1:
 			var t := float(sgi) / segs
 			var c := o + dir * lean * t * t + Vector3(0, h * t, 0); var ww := w * (1.0 - t * .92)
@@ -699,7 +710,7 @@ func _grass() -> void:
 					st.set_normal(n); st.set_uv(Vector2(0 if idx < 2 else 1, Q[idx][1])); st.add_vertex(Q[idx][0])
 			prev = row
 	var mesh := st.commit()
-	var sp := .55; var RM := 46.0
+	var sp := .62; var RM := 44.0
 	var pts := []
 	var nn := int(RM / sp)
 	for j in range(-nn, nn + 1):

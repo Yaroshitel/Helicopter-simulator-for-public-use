@@ -37,7 +37,7 @@ func _ready() -> void:
 		for i in 2:
 			_voice("w1_%d" % i, _tone("sin", 3000), "", 0); _voice("w2_%d" % i, _tone("sin", 5200), "", 0); _voice("tn_%d" % i, noise, "band", 600, .6)
 		_voice("apu", _tone("sin", 6000), "", 0); _voice("apun", noise, "band", 1800, .8); _voice("hiss", noise, "high", 2500)
-	for k in V: V[k].p.play()
+	for k in V: AudioServer.set_bus_bypass_effects(V[k].bus, true)
 
 func _exit_tree() -> void:
 	for k in V: AudioServer.remove_bus(AudioServer.get_bus_index("H_" + k))
@@ -100,10 +100,20 @@ func _tone(kind: String, f: float) -> AudioStreamWAV:
 func _sv(n: String, gain: float, rate := -1.0, k := .25) -> void:
 	var v: Dictionary = V[n]
 	v.g += (gain - v.g) * k
-	(v.p as AudioStreamPlayer).volume_db = linear_to_db(maxf(v.g, 1e-5))
+	var p: AudioStreamPlayer = v.p
+	var silent: bool = v.g < 1e-4 and gain < 1e-4
+	if silent:
+		if p.playing:
+			p.stop()
+			AudioServer.set_bus_bypass_effects(v.bus, true)
+		return
+	if not p.playing:
+		AudioServer.set_bus_bypass_effects(v.bus, false)
+		p.play()
+	p.volume_db = linear_to_db(maxf(v.g, 1e-5))
 	if rate >= 0:
 		v.r += (rate - v.r) * k
-		(v.p as AudioStreamPlayer).pitch_scale = maxf(.01, v.r)
+		p.pitch_scale = maxf(.01, v.r)
 
 func _cut(n: String, f: float) -> void:
 	var e := AudioServer.get_bus_effect(V[n].bus, 0) as AudioEffectFilter
